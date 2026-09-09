@@ -289,7 +289,7 @@
 
         // ดึงค่าความเร็วจากสไลเดอร์แบบเรียลไทม์ (เลขน้อยช้า, เลขมากเร็ว)
         const currentSpeed = parseFloat(document.getElementById('setting-speed').value) || 2;
-        scAngle += currentSpeed * 0.012;
+        scAngle += currentSpeed * 0.1;
 
         // ถ้าเข็มหมุนครบรอบ (เกิน 2Pi) ถือว่าพลาด
         if (scAngle > Math.PI * 2) {
