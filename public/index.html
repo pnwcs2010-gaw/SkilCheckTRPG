@@ -23,12 +23,8 @@
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.7); display: none;
             justify-content: center; align-items: center; z-index: 999;
+            pointer-events: none; /* ป้องกันการบล็อกหน้าจอตอนปิด */
         }
-        canvas { background: transparent; }
-        #feedback-text { position: absolute; font-size: 32px; font-weight: bold; text-shadow: 2px 2px 4px #000; pointer-events: none; }
-    </style>
-</head>
-<body>
 
 <div class="container">
     <!-- หน้าจอเข้าสู่ระบบ / สร้างห้อง -->
@@ -320,7 +316,7 @@
     }
 
     function endSkillCheck(result) {
-        if (!scActive) return; // ป้องกันการเรียกซ้ำซ้อน
+        if (!scActive) return;
         scActive = false;
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
@@ -330,14 +326,16 @@
 
         socket.emit('skillcheck-result', { roomId: currentRoom, result, playerName: myName });
 
-        // หน่วงเวลาเล็กน้อยก่อนขึ้นรอบถัดไป (ถ้าตั้ง Count ไว้มากกว่า 1)
         if (timeoutId) clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
             scRemainingCount--;
             if (scRemainingCount > 0 && result !== 'FAIL') {
                 startSingleSkillCheck(parseFloat(document.getElementById('setting-size').value));
             } else {
-                document.getElementById('skillcheck-overlay').style.display = 'none';
+                // บังคับปิด Overlay และคืนค่า pointer-events ให้คลิกเว็บได้ปกติ
+                const overlay = document.getElementById('skillcheck-overlay');
+                overlay.style.display = 'none';
+                overlay.style.pointerEvents = 'none'; 
             }
         }, 800);
     }
