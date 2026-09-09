@@ -226,29 +226,46 @@
         startSingleSkillCheck(settings.size);
     });
 
+    let animationFrameId = null;
+    let timeoutId = null; // ตัวแปรเก็บ ID ของ Timeout เพื่อเคลียร์ค่าเก่า
+
+    socket.on('trigger-skillcheck', (settings) => {
+        // เคลียร์ค่าค้างเก่าทั้งหมดก่อนเริ่มใหม่
+        if (timeoutId) clearTimeout(timeoutId);
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+        scSpeed = settings.speed;
+        scTotalCount = settings.count;
+        scRemainingCount = scTotalCount;
+        startSingleSkillCheck(settings.size);
+    });
+
     function startSingleSkillCheck(sizeMultiplier) {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
         document.getElementById('skillcheck-overlay').style.display = 'flex';
         document.getElementById('feedback-text').innerText = '';
         scActive = true;
         
-        // กำหนดให้เข็มเริ่มต้นที่ตำแหน่งด้านบน (12 นฬิกา)
+        // กำหนดให้เข็มเริ่มต้นที่ตำแหน่งด้านบนเสมอ (-Math.PI / 2)
         scAngle = -Math.PI / 2;
+        const maxAngle = scAngle + (Math.PI * 2); // วิ่งครบ 1 รอบพอดี
 
-        // ขยายขนาดโซน Success ให้กว้างขึ้นอีก 20% เพื่อลดปัญหาจังหวะหน่วง (Lag)
         const zoneWidth = (Math.PI / 2.5) * sizeMultiplier; 
         
-        scSuccessStart = (Math.PI / 4) + (Math.random() * (Math.PI * 0.8));
+        // สุ่มตำแหน่งโซนสำเร็จ
+        scSuccessStart = scAngle + (Math.PI * 0.5) + (Math.random() * (Math.PI * 0.8));
         scSuccessEnd = scSuccessStart + zoneWidth;
 
-        // ขยายโซน Perfect ให้กว้างขึ้นเล็กน้อยเช่นกัน (ประมาณ 20 องศา)
         const perfectWidth = Math.PI / 9;
         scPerfectStart = scSuccessStart + (zoneWidth / 2) - (perfectWidth / 2);
         scPerfectEnd = scPerfectStart + perfectWidth;
 
-        runSkillCheckLoop();
+        runSkillCheckLoop(maxAngle);
     }
 
-    function runSkillCheckLoop() {
+    function runSkillCheckLoop(maxAngle) {
         if (!scActive) return;
         const canvas = document.getElementById('sc-canvas');
         const ctx = canvas.getContext('2d');
@@ -256,30 +273,30 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
-        const radius = 110; // ขยายขนาดวงให้ใหญ่ขึ้นเล็กน้อย มองเห็นชัดขึ้น
+        const radius = 110;
 
-        // 1. วาดวงกลมพื้นหลัง (ขอบนอก)
+        // 1. วงกลมพื้นหลัง
         ctx.beginPath();
         ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
         ctx.lineWidth = 10;
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
         ctx.stroke();
 
-        // 2. วาดโซนสำเร็จ (สีขาว)
+        // 2. โซนสำเร็จ (สีขาว)
         ctx.beginPath();
         ctx.arc(centerX, centerY, radius, scSuccessStart, scSuccessEnd);
         ctx.lineWidth = 14;
         ctx.strokeStyle = '#ffffff';
         ctx.stroke();
 
-        // 3. วาดโซนเพอร์เฟกต์ (สีเหลืองทอง)
+        // 3. โซนเพอร์เฟกต์ (สีเหลืองทอง)
         ctx.beginPath();
         ctx.arc(centerX, centerY, radius, scPerfectStart, scPerfectEnd);
         ctx.lineWidth = 16;
         ctx.strokeStyle = '#ffcc00';
         ctx.stroke();
 
-        // 4. วาดเข็มนาฬิกา (หมุนตามเข็มนาฬิกา)
+        // 4. เข็มนาฬิกา
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);
         const needleX = centerX + Math.cos(scAngle) * (radius - 8);
@@ -289,22 +306,23 @@
         ctx.strokeStyle = '#e74c3c';
         ctx.stroke();
 
-        // หมุนเข็มเพิ่มขึ้นเรื่อยๆ
-        scAngle += scSpeed * 0.001;
+        // อัปเดตความเร็วปัจจุบันจากช่องสไลด์
+        const currentSpeed = parseFloat(document.getElementById('setting-speed').value) || 2;
+        scAngle += currentSpeed * 0.009;
 
-        // ถ้าเข็มหมุนครบวงรอบครบรอบ (วนกลับมาตำแหน่งเริ่มต้นหรือเกิน 2Pi จากจุดเริ่ม) ถือว่าพลาด (Fail)
-        // ตั้งค่าให้หมุนครบ 1 รอบเต็มจากจุดเริ่ม
-        if (scAngle > (Math.PI * 1.5) + (Math.PI * 2)) {
+        // ถ้าเข็มวิ่งครบ 1 รอบเต็มจากจุดเริ่มต้น ถือว่าพลาด (FAIL)
+        if (scAngle > maxAngle) {
             endSkillCheck('FAIL');
             return;
         }
 
-        animationFrameId = requestAnimationFrame(runSkillCheckLoop);
+        animationFrameId = requestAnimationFrame(() => runSkillCheckLoop(maxAngle));
     }
 
     function endSkillCheck(result) {
-        cancelAnimationFrame(animationFrameId);
+        if (!scActive) return; // ป้องกันการเรียกซ้ำซ้อน
         scActive = false;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
         const fbEl = document.getElementById('feedback-text');
         fbEl.innerText = result;
@@ -312,7 +330,9 @@
 
         socket.emit('skillcheck-result', { roomId: currentRoom, result, playerName: myName });
 
-        setTimeout(() => {
+        // หน่วงเวลาเล็กน้อยก่อนขึ้นรอบถัดไป (ถ้าตั้ง Count ไว้มากกว่า 1)
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
             scRemainingCount--;
             if (scRemainingCount > 0 && result !== 'FAIL') {
                 startSingleSkillCheck(parseFloat(document.getElementById('setting-size').value));
