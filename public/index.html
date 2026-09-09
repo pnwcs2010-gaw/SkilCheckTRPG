@@ -48,18 +48,24 @@
         
         <div style="background: #252525; padding: 15px; border-radius: 8px; margin-top: 15px;">
             <h3>ตั้งค่าสกิลเช็ค</h3>
-            <label>ความเร็วเข็ม (Speed): <input type="range" id="setting-speed" min="2" max="15" value="6"></label>
-            <label>ขนาดโซนสำเร็จ (Size multiplier): <input type="number" id="setting-size" value="1" min="0.5" max="2" step="0.1"></label>
-            <label>จำนวนครั้งที่ต้องกดติดต่อกัน (Count): <input type="number" id="setting-count" value="1" min="1" max="5"></label>
             
-            <label>ส่งไปที่:</label>
+            <label>ความเร็วเข็ม (Speed): <span id="val-speed" style="color: #ffcc00; font-weight: bold;">6</span></label>
+            <input type="range" id="setting-speed" min="2" max="15" value="6" oninput="document.getElementById('val-speed').innerText = this.value">
+            
+            <label style="margin-top: 10px; display: block;">ขนาดโซนสำเร็จ (Size multiplier): <span id="val-size" style="color: #ffcc00; font-weight: bold;">1</span>x</label>
+            <input type="range" id="setting-size" min="0.5" max="2" step="0.1" value="1" oninput="document.getElementById('val-size').innerText = this.value">
+            
+            <label style="margin-top: 10px; display: block;">จำนวนครั้งที่ต้องกด (Count): <span id="val-count" style="color: #ffcc00; font-weight: bold;">1</span> ครั้ง</label>
+            <input type="range" id="setting-count" min="1" max="5" value="1" oninput="document.getElementById('val-count').innerText = this.value">
+            
+            <label style="margin-top: 10px; display: block;">ส่งไปที่:</label>
             <select id="setting-target">
                 <option value="all">ทุกคนในห้อง</option>
             </select>
             
             <button id="btn-trigger" style="background: #5cb85c; margin-top: 15px;">ส่งสกิลเช็ค!</button>
         </div>
-
+        
         <h3>รายชื่อผู้เล่นในห้อง</h3>
         <div id="player-list"></div>
         <div id="live-feed" style="margin-top: 15px; font-size: 14px; color: #aaa;"></div>
