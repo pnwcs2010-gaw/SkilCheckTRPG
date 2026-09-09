@@ -1,0 +1,145 @@
+body {
+    background-color: #111;
+    color: #fff;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 400px;
+    padding: 20px;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.control-group {
+    margin: 10px 0;
+    width: 100%;
+    text-align: center;
+}
+
+input[type="range"] {
+    width: 100%;
+    cursor: pointer;
+}
+
+button {
+    background-color: #e67e22;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    font-size: 15px;
+    cursor: pointer;
+    border-radius: 5px;
+    margin-top: 10px;
+    font-weight: bold;
+    width: 100%;
+}
+
+button:hover {
+    background-color: #d35400;
+}
+
+.multiplayer-box {
+    margin-top: 20px;
+    border-top: 1px solid #333;
+    padding-top: 15px;
+    width: 100%;
+    text-align: center;
+}
+
+.join-group {
+    display: flex;
+    gap: 5px;
+    margin-top: 8px;
+}
+
+.join-group input {
+    flex: 1;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #444;
+    background: #222;
+    color: #fff;
+}
+
+#room-status {
+    font-size: 13px;
+    color: #f1c40f;
+    margin-top: 8px;
+    min-height: 20px;
+}
+
+/* ส่วนของวงกลม Skill Check */
+#skillcheck-container {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    margin: 20px 0;
+}
+
+#outer-circle {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border: 6px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    box-sizing: border-box;
+}
+
+#success-zone {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    border-radius: 50%;
+    box-sizing: border-box;
+    z-index: 1;
+}
+
+#needle {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 4px;
+    height: 90px;
+    background-color: #fff;
+    transform-origin: top center;
+    transform: translate(-50%, 0) rotate(180deg);
+    box-shadow: 0 0 5px rgba(0,0,0,0.5);
+    z-index: 2;
+}
+
+#inner-circle {
+    position: absolute;
+    top: 25px; left: 25px;
+    width: 150px; height: 150px;
+    background-color: #1a1a1a;
+    border-radius: 50%;
+    z-index: 3;
+}
+
+#result-message {
+    font-size: 22px;
+    font-weight: bold;
+    height: 30px;
+    text-transform: uppercase;
+    text-align: center;
+}
+
+.instruction {
+    font-size: 12px;
+    color: #888;
+    text-align: center;
+}
