@@ -225,18 +225,17 @@
         document.getElementById('feedback-text').innerText = '';
         scActive = true;
         
-        // กำหนดให้เข็มเริ่มต้นที่มุมด้านบนเสมอ (-Math.PI / 2 หรือ 12 นฬิกา) เพื่อความยุติธรรมและมองง่าย
+        // กำหนดให้เข็มเริ่มต้นที่ตำแหน่งด้านบน (12 นฬิกา)
         scAngle = -Math.PI / 2;
 
-        // สุ่มตำแหน่งโซนสำเร็จให้อยู่ในช่วงด้านขวาหรือด้านล่าง (ห่างจากจุดเริ่มต้นพอสมควรเพื่อให้มีเวลาตั้งตัว)
-        const zoneWidth = (Math.PI / 3) * sizeMultiplier; 
+        // ขยายขนาดโซน Success ให้กว้างขึ้นอีก 20% เพื่อลดปัญหาจังหวะหน่วง (Lag)
+        const zoneWidth = (Math.PI / 2.5) * sizeMultiplier; 
         
-        // สุ่มมุมโซนสำเร็จให้อยู่ในช่วง 30 ถึง 270 องศาจากจุดเริ่มต้น
-        scSuccessStart = (Math.PI / 4) + (Math.random() * Math.PI);
+        scSuccessStart = (Math.PI / 4) + (Math.random() * (Math.PI * 0.8));
         scSuccessEnd = scSuccessStart + zoneWidth;
 
-        // โซน Perfect อยู่ตรงกลางโซน Success (ขนาด 15 องศา)
-        const perfectWidth = Math.PI / 12;
+        // ขยายโซน Perfect ให้กว้างขึ้นเล็กน้อยเช่นกัน (ประมาณ 20 องศา)
+        const perfectWidth = Math.PI / 9;
         scPerfectStart = scSuccessStart + (zoneWidth / 2) - (perfectWidth / 2);
         scPerfectEnd = scPerfectStart + perfectWidth;
 
