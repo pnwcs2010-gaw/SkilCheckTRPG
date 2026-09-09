@@ -143,3 +143,19 @@ button:hover {
     color: #888;
     text-align: center;
 }
+
+/* เพิ่มส่วนนี้ลงไปที่บรรทัดล่างสุดของ style.css */
+#skillcheck-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: none; /* ซ่อนเป็นค่าเริ่มต้น ไม่ให้จอดำ */
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    z-index: 999;
+    pointer-events: none; /* ป้องกันการบล็อกหน้าจอเวลาไม่ได้เล่น */
+}
