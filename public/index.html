@@ -217,6 +217,7 @@
     // ==========================================
     
     // รับคำสั่งให้เริ่ม Skill Check (อาจจะเป็นตาเราเล่นเอง หรือคนอื่นเล่นแล้วเราเปิดดู)
+    // รับคำสั่งให้เริ่ม Skill Check
     socket.on('trigger-skillcheck', (data) => {
         if (timeoutId) clearTimeout(timeoutId);
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
@@ -227,7 +228,7 @@
         scRemainingCount = scTotalCount;
         scCurrentSize = settings.size;
         
-        // เช็กว่าเป็นตาเราต้องกดเองไหม (ถ้า targetId เป็น socket.id ของเรา หรือเป็น 'all' และไม่ใช่ Host)
+        // เช็กว่าเป็นตาเราไหม: ถ้า targetId ตรงกับ socket.id ของเรา หรือ targetId เป็น 'all' (ทุกคนในห้องต้องกด)
         isMyTurn = (data.targetId === socket.id || data.targetId === 'all');
         
         const overlay = document.getElementById('skillcheck-overlay');
@@ -235,7 +236,7 @@
         
         const targetNameEl = document.getElementById('target-player-name');
         if (isMyTurn) {
-            targetNameEl.innerText = "ตาของคุณ!";
+            targetNameEl.innerText = "ตาของคุณ! (กด Spacebar หรือคลิก)";
             targetNameEl.style.color = "#5cb85c";
         } else {
             targetNameEl.innerText = `กำลังดูเพื่อนเล่น (${data.targetName || 'Player'})`;
@@ -249,10 +250,12 @@
         scAngle = 0;
         spawnNewZone(scCurrentSize);
 
+        // ถ้าเป็นตาเรา ให้เราเป็นคนรันลูปและส่งพิกัดให้คนอื่นดู
+        // แต่ถ้าไม่ใช่ตาเรา ให้เรารอรับพิกัดจากคนที่กำลังเล่นอยู่
         if (isMyTurn) {
-            runSkillCheckLoopOwner(); // ลูปสำหรับเจ้าของตา (คำนวณและส่งข้อมูลบอกคนอื่น)
+            runSkillCheckLoopOwner();
         } else {
-            runSkillCheckLoopSpectator(); // ลูปสำหรับคนอื่น (นั่งดูเข็มวิ่งตามข้อมูลที่ได้รับ)
+            runSkillCheckLoopSpectator();
         }
     });
 
