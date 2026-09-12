@@ -243,22 +243,37 @@
 
         const zoneWidth = (Math.PI / 2.5) * sizeMultiplier;
         const perfectWidth = Math.PI / 9;
+        const maxLimit = Math.PI * 2 - 0.2; // ขอบเขตสูงสุดภายในวงกลม
 
-        // สุ่มสร้างโซนตามจำนวนจุดที่ Host เลือก (1 ถึง 4 จุด)
-        let lastEnd = 0.5;
-        for (let i = 0; i < scPointsPerCheck; i++) {
-            let start = lastEnd + (i === 0 ? Math.random() * 1.5 : 0.8 + Math.random() * 0.8);
+        // สุ่มสร้างตำแหน่งแต่ละจุดแบบอิสระและเช็คไม่ให้ทับซ้อนกัน
+        let attempts = 0;
+        while (scZones.length < scPointsPerCheck && attempts < 100) {
+            attempts++;
+            let start = Math.random() * (maxLimit - zoneWidth);
             let end = start + zoneWidth;
-            
-            scZones.push({
-                start: start,
-                end: end,
-                perfectStart: start + (zoneWidth / 2) - (perfectWidth / 2),
-                perfectEnd: start + (zoneWidth / 2) + (perfectWidth / 2),
-                hit: false
-            });
-            lastEnd = end;
+
+            // ตรวจสอบว่าไม่ทับกับโซนอื่นที่สุ่มมาก่อนหน้า (เว้นช่องว่างระหว่างโซนอย่างน้อย 0.3 เรเดียน)
+            let overlapping = false;
+            for (let z of scZones) {
+                if (!(end + 0.3 < z.start || start > z.end + 0.3)) {
+                    overlapping = true;
+                    break;
+                }
+            }
+
+            if (!overlapping) {
+                scZones.push({
+                    start: start,
+                    end: end,
+                    perfectStart: start + (zoneWidth / 2) - (perfectWidth / 2),
+                    perfectEnd: start + (zoneWidth / 2) + (perfectWidth / 2),
+                    hit: false
+                });
+            }
         }
+
+        // เรียงลำดับตำแหน่งจากน้อยไปมาก เพื่อให้ผู้เล่นต้องกดเรียงตามเข็มนาฬิกา
+        scZones.sort((a, b) => a.start - b.start);
 
         runSkillCheckLoop();
     }
