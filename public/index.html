@@ -108,12 +108,108 @@
     let scTotalCount = 1;
     let animationFrameId = null;
     let timeoutId = null;
-    
-    // ตัวแปรสำหรับระบบหลายจุดในวงเดียว
-    let scZones = [];
-    let currentTargetZoneIndex = 0;
 
-    // รับคำสั่งเปิดสกิลเช็คจาก Host
+    // เปลี่ยนหน้าจอ UI
+    function showScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+    }
+
+    // ปุ่มสร้างห้อง
+    document.getElementById('btn-create').addEventListener('click', () => {
+        myName = document.getElementById('input-name').value || 'Host';
+        socket.emit('create-room', { playerName: myName }, (res) => {
+            if (res.success) {
+                currentRoom = res.roomId;
+                isHost = true;
+                document.getElementById('display-room-code').innerText = currentRoom;
+                updatePlayerListHost(res.players);
+                showScreen('screen-host');
+            }
+        });
+    });
+
+    // ปุ่มเข้าร่วมห้อง
+    document.getElementById('btn-join').addEventListener('click', () => {
+        myName = document.getElementById('input-name').value || 'Player';
+        const roomId = document.getElementById('input-room').value.toUpperCase();
+        if (!roomId) return alert('กรุณากรอกรหัสห้อง');
+
+        socket.emit('join-room', { roomId, playerName: myName }, (res) => {
+            if (res.success) {
+                currentRoom = roomId;
+                isHost = false;
+                document.getElementById('waiting-room-code').innerText = currentRoom;
+                updatePlayerListWaiting(res.players);
+                showScreen('screen-waiting');
+            } else {
+                alert(res.message);
+            }
+        });
+    });
+
+    // อัปเดตรายชื่อฝั่ง Host
+    function updatePlayerListHost(players) {
+        const listEl = document.getElementById('player-list');
+        const selectEl = document.getElementById('setting-target');
+        
+        listEl.innerHTML = '';
+        selectEl.innerHTML = '<option value="all">ทุกคนในห้อง</option>';
+
+        players.forEach(p => {
+            listEl.innerHTML += `<div class="player-item"><span>${p.name}</span><span>${p.id === socket.id ? '(คุณ - Host)' : ''}</span></div>`;
+            if (p.id !== socket.id) {
+                selectEl.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+            }
+        });
+    }
+
+    // อัปเดตรายชื่อฝั่งผู้เล่นทั่วไป
+    function updatePlayerListWaiting(players) {
+        const listEl = document.getElementById('waiting-player-list');
+        listEl.innerHTML = '';
+        players.forEach(p => {
+            listEl.innerHTML += `<div class="player-item"><span>${p.name}</span><span>${p.id === socket.id ? '(คุณ)' : ''}</span></div>`;
+        });
+    }
+
+    socket.on('update-players', (players) => {
+        if (isHost) {
+            updatePlayerListHost(players);
+        } else {
+            updatePlayerListWaiting(players);
+        }
+    });
+
+    // Host กดปุ่มส่ง Skill Check
+    document.getElementById('btn-trigger').addEventListener('click', () => {
+        const speed = parseFloat(document.getElementById('setting-speed').value);
+        const size = parseFloat(document.getElementById('setting-size').value);
+        const count = parseInt(document.getElementById('setting-count').value);
+        const targetId = document.getElementById('setting-target').value;
+
+        socket.emit('send-skillcheck', {
+            roomId: currentRoom,
+            targetId,
+            settings: { speed, size, count }
+        });
+    });
+
+    // รับผลลัพธ์จากลูกห้อง (แสดงที่จอ Host)
+    socket.on('player-result', ({ playerName, result }) => {
+        const feed = document.getElementById('live-feed');
+        const color = result === 'PERFECT!' ? '#ffcc00' : (result === 'SUCCESS' ? '#5cb85c' : '#d9534f');
+        feed.innerHTML = `<span style="color:${color}">${playerName}: ${result}</span><br>` + feed.innerHTML;
+    });
+
+    socket.on('host-disconnected', () => {
+        alert('หัวหน้าห้องออกจากเกม / หลุดการเชื่อมต่อ');
+        location.reload();
+    });
+
+    // ==========================================
+    // ระบบแสดงและคำนวณ Skill Check Canvas (DBD Style)
+    // ==========================================
     socket.on('trigger-skillcheck', (settings) => {
         if (timeoutId) clearTimeout(timeoutId);
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
@@ -130,44 +226,22 @@
 
         const overlay = document.getElementById('skillcheck-overlay');
         overlay.style.display = 'flex';
-        overlay.style.pointerEvents = 'auto';
+        overlay.style.pointerEvents = 'auto'; // เปิดให้คลิกเล่นได้
         
         const fbEl = document.getElementById('feedback-text');
         if (fbEl) fbEl.innerText = '';
 
         scActive = true;
         scAngle = 0; // เริ่มต้นที่มุม 0
-        currentTargetZoneIndex = 0;
-        scZones = [];
 
-        // สุ่มสร้างโซนเป้าหมาย 2 จุดในวงเดียวกัน
-        const zoneWidth = (Math.PI / 3) * sizeMultiplier;
-        const perfectWidth = Math.PI / 10;
+        const zoneWidth = (Math.PI / 2.5) * sizeMultiplier;
+        const startClock = (7 - 3) * (Math.PI / 6);
+        scSuccessStart = startClock + (Math.random() * (Math.PI * 1.0));
+        scSuccessEnd = scSuccessStart + zoneWidth;
 
-        // จุดที่ 1
-        let start1 = 1.0 + Math.random() * 1.0;
-        let end1 = start1 + zoneWidth;
-        scZones.push({
-            start: start1,
-            end: end1,
-            perfectStart: start1 + (zoneWidth / 2) - (perfectWidth / 2),
-            perfectEnd: start1 + (zoneWidth / 2) + (perfectWidth / 2),
-            hit: false
-        });
-
-        // จุดที่ 2 (เว้นระยะห่างจากจุดแรก)
-        let start2 = end1 + 1.2 + Math.random() * 1.0;
-        let end2 = start2 + zoneWidth;
-        // ป้องกันไม่ให้เกินวงกลมเต็ม (2Pi)
-        if (end2 < Math.PI * 5.5) {
-            scZones.push({
-                start: start2,
-                end: end2,
-                perfectStart: start2 + (zoneWidth / 2) - (perfectWidth / 2),
-                perfectEnd: start2 + (zoneWidth / 2) + (perfectWidth / 2),
-                hit: false
-            });
-        }
+        const perfectWidth = Math.PI / 9;
+        scPerfectStart = scSuccessStart + (zoneWidth / 2) - (perfectWidth / 2);
+        scPerfectEnd = scPerfectStart + perfectWidth;
 
         runSkillCheckLoop();
     }
@@ -190,32 +264,21 @@
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.stroke();
 
-        // 2. วาดทุกโซนเป้าหมายในวง
-        scZones.forEach((zone, idx) => {
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, radius, zone.start, zone.end);
-            ctx.lineWidth = 12;
-            // ถ้าจุดไหนถูกกดโดนแล้วเปลี่ยนเป็นสีเขียว ถ้ายังไม่โดนและถึงคิวจะเป็นสีขาว
-            if (zone.hit) {
-                ctx.strokeStyle = '#2ecc71';
-            } else if (idx === currentTargetZoneIndex) {
-                ctx.strokeStyle = '#ffffff';
-            } else {
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-            }
-            ctx.stroke();
+        // 2. โซนสำเร็จ (สีขาว)
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, scSuccessStart, scSuccessEnd);
+        ctx.lineWidth = 12;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
 
-            // วาดโซน Perfect (สีเหลืองทองเฉพาะจุดที่ยังไม่โดน)
-            if (!zone.hit) {
-                ctx.beginPath();
-                ctx.arc(centerX, centerY, radius, zone.perfectStart, zone.perfectEnd);
-                ctx.lineWidth = 14;
-                ctx.strokeStyle = '#ffcc00';
-                ctx.stroke();
-            }
-        });
+        // 3. โซนเพอร์เฟกต์ (สีเหลืองทอง)
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, scPerfectStart, scPerfectEnd);
+        ctx.lineWidth = 14;
+        ctx.strokeStyle = '#ffcc00';
+        ctx.stroke();
 
-        // 3. วาดเข็มนาฬิกา
+        // 4. เข็มนาฬิกา
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);
         const needleX = centerX + Math.cos(scAngle) * (radius - 5);
@@ -225,28 +288,13 @@
         ctx.strokeStyle = '#e74c3c';
         ctx.stroke();
 
-        let currentAngle = scAngle % (Math.PI * 2);
-        if (currentAngle < 0) currentAngle += Math.PI * 2;
+        // ดึงค่าความเร็วจากสไลเดอร์แบบเรียลไทม์ (เลขน้อยช้า, เลขมากเร็ว)
+        scAngle += scSpeed * 0.02;
 
-        // เช็คว่าถ้าเข็มกวาดเลยโซนที่ต้องกดไปแล้วโดยผู้เล่นไม่ยอมกด -> ถือว่า FAIL ทอดทิ้ง
-        let targetZone = scZones[currentTargetZoneIndex];
-        if (targetZone && !targetZone.hit && currentAngle > targetZone.end) {
+        // ถ้าเข็มหมุนครบรอบ (เกิน 2Pi) ถือว่าพลาด
+        if (scAngle > Math.PI * 2) {
             endSkillCheck('FAIL');
             return;
-        }
-
-        // หมุนเข็มเพิ่มขึ้นเรื่อยๆ (ใช้ความเร็วที่หารสเกลแล้ว)
-        const currentSpeed = parseFloat(document.getElementById('setting-speed').value) || 1;
-        const actualSpeed = currentSpeed * 0.5;
-        scAngle += actualSpeed * 0.012;
-
-        // ถ้าเข็มหมุนครบรอบวง (เกิน 2Pi) และจัดการครบทุกจุดแล้ว
-        if (scAngle > Math.PI * 2) {
-            // ถ้ายังเคลียร์ไม่ครบทุกจุดแล้วหลุดรอบวง
-            if (currentTargetZoneIndex < scZones.length) {
-                endSkillCheck('FAIL');
-                return;
-            }
         }
 
         animationFrameId = requestAnimationFrame(runSkillCheckLoop);
@@ -254,44 +302,18 @@
 
     function handlePlayerInput() {
         if (!scActive) return;
+        scActive = false;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
         let currentAngle = scAngle % (Math.PI * 2);
         if (currentAngle < 0) currentAngle += Math.PI * 2;
 
-        let targetZone = scZones[currentTargetZoneIndex];
-        
-        // ถ้ากดตอนที่ไม่อยู่ในโซนเป้าหมายปัจจุบัน หรือไม่มีโซนเหลือแล้ว -> FAIL
-        if (!targetZone || currentAngle < targetZone.start || currentAngle > targetZone.end) {
-            endSkillCheck('FAIL');
-            return;
+        let result = 'FAIL';
+        if (currentAngle >= scPerfectStart && currentAngle <= scPerfectEnd) {
+            result = 'PERFECT!';
+        } else if (currentAngle >= scSuccessStart && currentAngle <= scSuccessEnd) {
+            result = 'SUCCESS';
         }
-
-        // เช็คว่าโดนโซน Perfect หรือ Success ปกติ
-        let hitResult = 'SUCCESS';
-        if (currentAngle >= targetZone.perfectStart && currentAngle <= targetZone.perfectEnd) {
-            hitResult = 'PERFECT!';
-        }
-
-        // ทำเครื่องหมายว่าจุดนี้โดนแล้ว
-        targetZone.hit = true;
-        currentTargetZoneIndex++;
-
-        // ถ้าเก็บครบทุกจุดในวงแล้ว จบรอบนี้ทันทีด้วยความสำเร็จ
-        if (currentTargetZoneIndex >= scZones.length) {
-            endSkillCheck(hitResult);
-        } else {
-            // แจ้งเตือนสั้นๆ ว่าผ่านจุดแรกแล้ว ให้เตรียมกดจุดถัดไป
-            const fbEl = document.getElementById('feedback-text');
-            if (fbEl) {
-                fbEl.innerText = `HIT (${currentTargetZoneIndex}/${scZones.length})`;
-                fbEl.style.color = '#ffcc00';
-            }
-        }
-    }
-
-    function endSkillCheck(result) {
-        scActive = false;
-        if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
         const fbEl = document.getElementById('feedback-text');
         if (fbEl) {
