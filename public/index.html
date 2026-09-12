@@ -50,12 +50,12 @@
             <h3>ตั้งค่าสกิลเช็ค</h3>
             
             <label>ความเร็วเข็ม (Speed): <span id="val-speed" style="color: #ffcc00; font-weight: bold;">3</span></label>
-            <input type="range" id="setting-speed" min="1" max="5" value="3" oninput="document.getElementById('val-speed').innerText = this.value">
+            <input type="range" id="setting-speed" min="1" max="10" value="3" oninput="document.getElementById('val-speed').innerText = this.value">
             
             <label style="margin-top: 10px; display: block;">ขนาดโซนสำเร็จ (Size multiplier): <span id="val-size" style="color: #ffcc00; font-weight: bold;">1</span>x</label>
             <input type="range" id="setting-size" min="0.5" max="2" step="0.1" value="1" oninput="document.getElementById('val-size').innerText = this.value">
             
-            <label style="margin-top: 10px; display: block;">จำนวนครั้งที่ต้องกด (Count): <span id="val-count" style="color: #ffcc00; font-weight: bold;">1</span> ครั้ง</label>
+            <label style="margin-top: 10px; display: block;">จำนวนรอบที่ต่อเนื่อง (Count): <span id="val-count" style="color: #ffcc00; font-weight: bold;">1</span> รอบ</label>
             <input type="range" id="setting-count" min="1" max="12" value="1" oninput="document.getElementById('val-count').innerText = this.value">
             
             <label style="margin-top: 10px; display: block;">ส่งไปที่:</label>
@@ -96,18 +96,17 @@
     let myName = '';
     let isHost = false;
 
-    // ตัวแปรควบคุมระบบ Skill Check Canvas
+    // ตัวแปรควบคุมระบบ Skill Check Canvas (รองรับ Multi-Zone)
     let scActive = false;
     let scAngle = 0;
     let scSpeed = 1;
-    let scSuccessStart = 0;
-    let scSuccessEnd = 0;
-    let scPerfectStart = 0;
-    let scPerfectEnd = 0;
     let scRemainingCount = 1;
     let scTotalCount = 1;
     let animationFrameId = null;
     let timeoutId = null;
+
+    let scZones = [];
+    let currentTargetZoneIndex = 0;
 
     // เปลี่ยนหน้าจอ UI
     function showScreen(screenId) {
@@ -208,7 +207,7 @@
     });
 
     // ==========================================
-    // ระบบแสดงและคำนวณ Skill Check Canvas (DBD Style)
+    // ระบบแสดงและคำนวณ Skill Check Canvas (Multi-Zone)
     // ==========================================
     socket.on('trigger-skillcheck', (settings) => {
         if (timeoutId) clearTimeout(timeoutId);
@@ -233,15 +232,36 @@
 
         scActive = true;
         scAngle = 0; // เริ่มต้นที่มุม 0
+        currentTargetZoneIndex = 0;
+        scZones = [];
 
+        // สุ่มสร้างโซนเป้าหมาย 2 จุดต่อเนื่องในวงเดียวกัน
         const zoneWidth = (Math.PI / 2.5) * sizeMultiplier;
-        const startClock = (7 - 3) * (Math.PI / 6);
-        scSuccessStart = startClock + (Math.random() * (Math.PI * 1.0));
-        scSuccessEnd = scSuccessStart + zoneWidth;
-
         const perfectWidth = Math.PI / 9;
-        scPerfectStart = scSuccessStart + (zoneWidth / 2) - (perfectWidth / 2);
-        scPerfectEnd = scPerfectStart + perfectWidth;
+
+        // จุดที่ 1
+        let start1 = 0.5 + Math.random() * 1.5;
+        let end1 = start1 + zoneWidth;
+        scZones.push({
+            start: start1,
+            end: end1,
+            perfectStart: start1 + (zoneWidth / 2) - (perfectWidth / 2),
+            perfectEnd: start1 + (zoneWidth / 2) + (perfectWidth / 2),
+            hit: false
+        });
+
+        // จุดที่ 2 (เว้นระยะห่างจากจุดแรก)
+        let start2 = end1 + 1.0 + Math.random() * 1.0;
+        let end2 = start2 + zoneWidth;
+        if (end2 < Math.PI * 5.8) {
+            scZones.push({
+                start: start2,
+                end: end2,
+                perfectStart: start2 + (zoneWidth / 2) - (perfectWidth / 2),
+                perfectEnd: start2 + (zoneWidth / 2) + (perfectWidth / 2),
+                hit: false
+            });
+        }
 
         runSkillCheckLoop();
     }
@@ -264,21 +284,31 @@
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.stroke();
 
-        // 2. โซนสำเร็จ (สีขาว)
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, scSuccessStart, scSuccessEnd);
-        ctx.lineWidth = 12;
-        ctx.strokeStyle = '#ffffff';
-        ctx.stroke();
+        // 2. วาดโซนเป้าหมายทั้งหมดในวง
+        scZones.forEach((zone, idx) => {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, zone.start, zone.end);
+            ctx.lineWidth = 12;
+            if (zone.hit) {
+                ctx.strokeStyle = '#2ecc71'; // สีเขียวเมื่อกดโดนแล้ว
+            } else if (idx === currentTargetZoneIndex) {
+                ctx.strokeStyle = '#ffffff'; // สีขาวสำหรับจุดที่ต้องกดปัจจุบัน
+            } else {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // สีจางสำหรับจุดถัดไป
+            }
+            ctx.stroke();
 
-        // 3. โซนเพอร์เฟกต์ (สีเหลืองทอง)
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, scPerfectStart, scPerfectEnd);
-        ctx.lineWidth = 14;
-        ctx.strokeStyle = '#ffcc00';
-        ctx.stroke();
+            // วาดโซน Perfect (สีเหลืองทองเฉพาะจุดที่ยังไม่โดน)
+            if (!zone.hit) {
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, zone.perfectStart, zone.perfectEnd);
+                ctx.lineWidth = 14;
+                ctx.strokeStyle = '#ffcc00';
+                ctx.stroke();
+            }
+        });
 
-        // 4. เข็มนาฬิกา
+        // 3. วาดเข็มนาฬิกา
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);
         const needleX = centerX + Math.cos(scAngle) * (radius - 5);
@@ -288,13 +318,26 @@
         ctx.strokeStyle = '#e74c3c';
         ctx.stroke();
 
-        // ดึงค่าความเร็วจากสไลเดอร์แบบเรียลไทม์ (เลขน้อยช้า, เลขมากเร็ว)
-        scAngle += scSpeed * 0.02;
+        let currentAngle = scAngle % (Math.PI * 2);
+        if (currentAngle < 0) currentAngle += Math.PI * 2;
 
-        // ถ้าเข็มหมุนครบรอบ (เกิน 2Pi) ถือว่าพลาด
-        if (scAngle > Math.PI * 2) {
+        // เช็คว่าถ้าเข็มกวาดเลยโซนปัจจุบันไปแล้วโดยผู้เล่นไม่กด -> FAIL ทันที
+        let targetZone = scZones[currentTargetZoneIndex];
+        if (targetZone && !targetZone.hit && currentAngle > targetZone.end) {
             endSkillCheck('FAIL');
             return;
+        }
+
+        // หมุนเข็มเพิ่มขึ้นเรื่อยๆ (แปลงค่าสเกลความเร็วให้สมูทขึ้น)
+        const actualSpeed = scSpeed * 0.5;
+        scAngle += actualSpeed * 0.012;
+
+        // ถ้าเข็มหมุนครบรอบวง (เกิน 2Pi) และยังเคลียร์จุดไม่ครบ -> FAIL
+        if (scAngle > Math.PI * 2) {
+            if (currentTargetZoneIndex < scZones.length) {
+                endSkillCheck('FAIL');
+                return;
+            }
         }
 
         animationFrameId = requestAnimationFrame(runSkillCheckLoop);
@@ -302,18 +345,43 @@
 
     function handlePlayerInput() {
         if (!scActive) return;
-        scActive = false;
-        if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
         let currentAngle = scAngle % (Math.PI * 2);
         if (currentAngle < 0) currentAngle += Math.PI * 2;
 
-        let result = 'FAIL';
-        if (currentAngle >= scPerfectStart && currentAngle <= scPerfectEnd) {
-            result = 'PERFECT!';
-        } else if (currentAngle >= scSuccessStart && currentAngle <= scSuccessEnd) {
-            result = 'SUCCESS';
+        let targetZone = scZones[currentTargetZoneIndex];
+
+        // ถ้ากดตอนไม่อยู่ในโซน หรือเคลียร์ครบหมดแล้วแต่ยังกดซ้ำ -> FAIL
+        if (!targetZone || currentAngle < targetZone.start || currentAngle > targetZone.end) {
+            endSkillCheck('FAIL');
+            return;
         }
+
+        // เช็คผล Perfect หรือ Success
+        let hitResult = 'SUCCESS';
+        if (currentAngle >= targetZone.perfectStart && currentAngle <= targetZone.perfectEnd) {
+            hitResult = 'PERFECT!';
+        }
+
+        targetZone.hit = true;
+        currentTargetZoneIndex++;
+
+        // ถ้าเก็บครบทุกจุดในวงแล้ว จบรอบนี้ทันที
+        if (currentTargetZoneIndex >= scZones.length) {
+            endSkillCheck(hitResult);
+        } else {
+            // แสดงสถานะย่อยว่าผ่านจุดแรกแล้ว ให้เตรียมกดจุดถัดไป
+            const fbEl = document.getElementById('feedback-text');
+            if (fbEl) {
+                fbEl.innerText = `HIT (${currentTargetZoneIndex}/${scZones.length})`;
+                fbEl.style.color = '#ffcc00';
+            }
+        }
+    }
+
+    function endSkillCheck(result) {
+        scActive = false;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
         const fbEl = document.getElementById('feedback-text');
         if (fbEl) {
@@ -344,7 +412,7 @@
         }
     });
 
-    // รองรับการแตะหน้าจอบบนมือถือ
+    // รองรับการแตะหน้าจอจอบบนมือถือ
     const overlayEl = document.getElementById('skillcheck-overlay');
     if (overlayEl) {
         overlayEl.addEventListener('click', () => {
@@ -352,7 +420,7 @@
                 handlePlayerInput();
             }
         });
-    };
+    }
 </script>
 
 </body>
