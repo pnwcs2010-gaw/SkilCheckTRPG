@@ -118,8 +118,7 @@
 
     // ปุ่มสร้างห้อง
     document.getElementById('btn-create').addEventListener('click', () => {
-        // แก้ไข: เอา .value ออกจาก id="input-name.value" เพราะมันผิดหลักการดึงข้อมูล
-        myName = document.getElementById('input-name').value || 'Host';
+        myName = document.getElementById('input-name.value') || document.getElementById('input-name').value || 'Host';
         socket.emit('create-room', { playerName: myName }, (res) => {
             if (res.success) {
                 currentRoom = res.roomId;
@@ -159,7 +158,6 @@
         selectEl.innerHTML = '<option value="all">ทุกคนในห้อง</option>';
 
         players.forEach(p => {
-            // แก้ไข: ใส่เครื่องหมาย Backtick (`) ครอบ
             listEl.innerHTML += `<div class="player-item"><span>${p.name}</span><span>${p.id === socket.id ? '(คุณ - Host)' : ''}</span></div>`;
             if (p.id !== socket.id) {
                 selectEl.innerHTML += `<option value="${p.id}">${p.name}</option>`;
@@ -172,7 +170,6 @@
         const listEl = document.getElementById('waiting-player-list');
         listEl.innerHTML = '';
         players.forEach(p => {
-            // แก้ไข: ใส่เครื่องหมาย Backtick (`) ครอบ
             listEl.innerHTML += `<div class="player-item"><span>${p.name}</span><span>${p.id === socket.id ? '(คุณ)' : ''}</span></div>`;
         });
     }
@@ -203,7 +200,6 @@
     socket.on('player-result', ({ playerName, result, current, total }) => {
         const feed = document.getElementById('live-feed');
         const color = result === 'PERFECT!' ? '#ffcc00' : (result === 'SUCCESS' ? '#5cb85c' : '#d9534f');
-        // แก้ไข: ใส่เครื่องหมาย Backtick (`) ครอบ
         const stepText = total > 1 ? ` [รอบที่ ${current}/${total}]` : '';
         feed.innerHTML = `<span style="color:${color}">${playerName}: ${result}${stepText}</span><br>` + feed.innerHTML;
     });
@@ -216,41 +212,32 @@
     // ==========================================
     // ระบบแสดงและคำนวณ Skill Check Canvas (DBD Style)
     // ==========================================
-    // แก้ไข: ต้องดึง settings ออกมาจาก data.settings (อิงตามไฟล์ server ที่คุณเคยให้) 
-    socket.on('trigger-skillcheck', (data) => { 
+    socket.on('trigger-skillcheck', (settings) => {
         if (timeoutId) clearTimeout(timeoutId);
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
-        // ดึงจาก object settings
-        const settings = data.settings || data; // ป้องกันพังถ้ารูปแบบ data มาแปลก
-        
         scSpeed = settings.speed;
         scTotalCount = settings.count;
         scRemainingCount = scTotalCount;
         scCurrentSize = settings.size;
         
-        // เช็คก่อนว่าส่งมาหาเราหรือเปล่า หรือส่งหา everyone
-        const isMyTurn = (data.targetId === socket.id || data.targetId === 'all');
+        const overlay = document.getElementById('skillcheck-overlay');
+        overlay.style.display = 'flex';
+        overlay.style.pointerEvents = 'auto';
         
-        if (isMyTurn) {
-            const overlay = document.getElementById('skillcheck-overlay');
-            overlay.style.display = 'flex';
-            overlay.style.pointerEvents = 'auto';
-            
-            const fbEl = document.getElementById('feedback-text');
-            if (fbEl) fbEl.innerText = '';
+        const fbEl = document.getElementById('feedback-text');
+        if (fbEl) fbEl.innerText = '';
 
-            scActive = true;
-            scAngle = 0; // รับรองว่าเข็มเริ่มจาก 0 
-            spawnNewZone(scCurrentSize);
+        scActive = true;
+        scAngle = 0;
+        spawnNewZone(scCurrentSize);
 
-            runSkillCheckLoop();
-        }
+        runSkillCheckLoop();
     });
 
     function spawnNewZone(sizeMultiplier) {
         const zoneWidth = (Math.PI / 2.5) * sizeMultiplier;
-        let minOffset = 2.0;
+        let minOffset = 1.2;
         let maxOffset = 3.5;
         // สร้างโซนถัดไปข้างหน้าจากตำแหน่งเข็มปัจจุบันเสมอโดยไม่มีสะดุด
         scSuccessStart = scAngle + minOffset + (Math.random() * (maxOffset - minOffset));
