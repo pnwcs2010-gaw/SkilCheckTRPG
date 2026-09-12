@@ -1,70 +1,89 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static(__dirname));
+// เปิดให้ใช้ไฟล์ในโฟลเดอร์ public
+app.use(express.static(path.join(__dirname, 'public')));
 
+// เก็บข้อมูลห้อง: { roomId: { host: socketId, players: [{id, name}], settings } }
 const rooms = {};
 
 io.on('connection', (socket) => {
+    console.log(`User connected: ${socket.id}`);
+
+    // สร้างรหัสห้องแบบสุ่ม 5 ตัวอักษร
+    const generateRoomCode = () => Math.random().toString(36).substring(2, 7).toUpperCase();
+
+    // สร้างห้อง
     socket.on('create-room', ({ playerName }, callback) => {
-        const roomId = Math.random().toString(36).substring(2, 7).toUpperCase();
+        const roomId = generateRoomCode();
         rooms[roomId] = {
             host: socket.id,
-            players: [{ id: socket.id, name: playerName }]
+            players: [{ id: socket.id, name: playerName || 'Host' }]
         };
         socket.join(roomId);
+        console.log(`Room created: ${roomId} by ${socket.id}`);
         callback({ success: true, roomId, players: rooms[roomId].players });
     });
 
+    // เข้าร่วมห้อง
     socket.on('join-room', ({ roomId, playerName }, callback) => {
-        roomId = roomId.toUpperCase();
-        if (rooms[roomId]) {
-            rooms[roomId].players.push({ id: socket.id, name: playerName });
+        const room = rooms[roomId];
+        if (room) {
             socket.join(roomId);
-            callback({ success: true, players: rooms[roomId].players });
-            io.to(roomId).emit('update-players', rooms[roomId].players);
+            room.players.push({ id: socket.id, name: playerName || `Player_${socket.id.substring(0,4)}` });
+            
+            // อัปเดตรายชื่อผู้เล่นให้ทุกคนในห้องรู้
+            io.to(roomId).emit('update-players', room.players);
+            
+            callback({ success: true, players: room.players });
+            console.log(`User ${socket.id} joined room ${roomId}`);
         } else {
-            callback({ success: false, message: 'ไม่พบรหัสห้องนี้' });
+            callback({ success: false, message: 'ไม่พบห้องนี้ กรุณาตรวจสอบรหัสห้องอีกครั้ง' });
         }
     });
 
+    // Host ส่งคำสั่ง Skill Check ไปยังผู้เล่น
     socket.on('send-skillcheck', ({ roomId, targetId, settings }) => {
-        if (rooms[roomId]) {
-            let targetName = "ทุกคนในห้อง";
-            if (targetId !== 'all') {
-                const targetPlayer = rooms[roomId].players.find(p => p.id === targetId);
-                if (targetPlayer) targetName = targetPlayer.name;
+        const room = rooms[roomId];
+        if (room && room.host === socket.id) {
+            if (targetId === 'all') {
+                // ส่งให้ทุกคนยกเว้น Host
+                socket.to(roomId).emit('trigger-skillcheck', settings);
+            } else {
+                // ส่งให้ผู้เล่นตาม ID ที่เจาะจง
+                io.to(targetId).emit('trigger-skillcheck', settings);
             }
-
-            io.to(roomId).emit('trigger-skillcheck', {
-                targetId,
-                targetName,
-                settings
-            });
         }
     });
-    socket.on('skillcheck-result', (data) => {
-        io.to(data.roomId).emit('player-result', data);
+
+    // ลูกห้องส่งผลลัพธ์การกดกลับมาหา Host
+    socket.on('skillcheck-result', ({ roomId, result, playerName }) => {
+        const room = rooms[roomId];
+        if (room) {
+            // แจ้งเตือน Host ให้แสดงผลลัพธ์บนจอแดชบอร์ด
+            io.to(room.host).emit('player-result', { playerName, result });
+        }
     });
 
+    // จัดการกรณีผู้เล่นหลุดการเชื่อมต่อ
     socket.on('disconnect', () => {
-        for (let roomId in rooms) {
-            let room = rooms[roomId];
-            let index = room.players.findIndex(p => p.id === socket.id);
-            if (index !== -1) {
-                room.players.splice(index, 1);
-                if (room.host === socket.id) {
-                    io.to(roomId).emit('host-disconnected');
-                    delete rooms[roomId];
-                } else {
-                    io.to(roomId).emit('update-players', room.players);
-                }
-                break;
+        console.log(`User disconnected: ${socket.id}`);
+        for (const roomId in rooms) {
+            const room = rooms[roomId];
+            room.players = room.players.filter(p => p.id !== socket.id);
+
+            if (socket.id === room.host) {
+                // ถ้า Host หลุด ให้ยุติห้องหรือแจ้งเตือน
+                io.to(roomId).emit('host-disconnected');
+                delete rooms[roomId];
+            } else {
+                io.to(roomId).emit('update-players', room.players);
             }
         }
     });
