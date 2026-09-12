@@ -339,17 +339,6 @@
         animationFrameId = requestAnimationFrame(runSkillCheckLoopOwner);
     }
 
-    // สำหรับคนอื่นในห้อง: นั่งดูเข็มวิ่งตามที่เจ้าของตาส่งมา
-    function runSkillCheckLoopSpectator() {
-        if (!scActive) return;
-        const canvas = document.getElementById('sc-canvas');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-
-        drawCanvas(ctx, canvas);
-        animationFrameId = requestAnimationFrame(runSkillCheckLoopSpectator);
-    }
-
     // รับข้อมูลพิกัดเข็มจากคนที่กำลังเล่นอยู่ (สำหรับผู้ชม)
     socket.on('spectate-sync', (data) => {
         if (!isMyTurn && scActive) {
