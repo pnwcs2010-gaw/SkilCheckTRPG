@@ -196,7 +196,7 @@
         });
     });
 
-    // รับผลลัพธ์จากลูกห้อง (แสดงที่บอร์ด Host แบบ Real-time ทุกครั้งที่กด)
+    // รับผลลัพธ์จากลูกห้อง (แสดงที่บอร์ด Host แบบ Real-time ทุกครั้งที่กดหรือพลาด)
     socket.on('player-result', ({ playerName, result, current, total }) => {
         const feed = document.getElementById('live-feed');
         const color = result === 'PERFECT!' ? '#ffcc00' : (result === 'SUCCESS' ? '#5cb85c' : '#d9534f');
@@ -292,10 +292,10 @@
         // หมุนเข็มเพิ่มขึ้นเรื่อยๆ
         scAngle += scSpeed * 0.02;
 
-        // ถ้าเข็มวิ่งเลยขอบเขตโซนเป้าหมายไปโดยไม่กด ถือว่า FAIL อัตโนมัติทันที
+        // ถ้าเข็มวิ่งเลยขอบเขตโซนเป้าหมายไปโดยไม่กด ถือว่า FAIL อัตโนมัติทันที และสร้างโซนใหม่วนต่อทันทีโดยไม่หยุด
         if (scAngle > scSuccessEnd) {
             handleSkillCheckStep('FAIL');
-            return;
+            if (!scActive) return; // ถ้าครบจำนวนรอบแล้ว ให้หยุดลูป
         }
 
         animationFrameId = requestAnimationFrame(runSkillCheckLoop);
@@ -339,7 +339,7 @@
         scRemainingCount--;
 
         if (scRemainingCount > 0) {
-            // สร้างโซนถัดไปทันทีโดยเข็มหมุนต่อไปข้างหน้าไม่หยุด (ไม่ว่าจะกดโดนหรือ Fail รอบนี้ก็ตาม)
+            // สร้างโซนถัดไปทันทีโดยเข็มหมุนต่อไปข้างหน้าไม่หยุด
             spawnNewZone(scCurrentSize);
         } else {
             // ครบทุกรอบแล้ว ปิดหน้าต่าง Skill Check
@@ -363,7 +363,7 @@
         }
     });
 
-    // รองรับการแตะหน้าจอจอบบนมือถือ
+    // รองรับการแตะหน้าจอบบนมือถือ
     const overlayEl = document.getElementById('skillcheck-overlay');
     if (overlayEl) {
         overlayEl.addEventListener('click', () => {
