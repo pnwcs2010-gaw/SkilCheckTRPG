@@ -87,16 +87,16 @@ io.on('connection', (socket) => {
             }
         }
     });
+    
+    socket.on('spectate-sync', (data) => {
+        socket.to(data.roomId).emit('spectate-sync', data);
+    });
+    socket.on('spectate-result', (data) => {
+    socket.to(data.roomId).emit('spectate-result', data);
+    });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
-});
-
-socket.on('spectate-sync', (data) => {
-    socket.to(data.roomId).emit('spectate-sync', data);
-});
-socket.on('spectate-result', (data) => {
-    socket.to(data.roomId).emit('spectate-result', data);
 });
