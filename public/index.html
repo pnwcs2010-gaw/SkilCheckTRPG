@@ -9,7 +9,8 @@
         body { background-color: #121212; color: #e0e0e0; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
         .container { width: 100%; max-width: 600px; background: #1e1e1e; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
         h1, h2 { text-align: center; color: #fff; }
-        input, select, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; font-size: 16px; }
+        input[type="text"], select, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; font-size: 16px; }
+        input[type="range"] { width: 100%; margin: 10px 0; cursor: pointer; }
         button { background: #d9534f; border: none; font-weight: bold; cursor: pointer; transition: background 0.2s; }
         button:hover { background: #c9302c; }
         button.secondary { background: #337ab7; }
@@ -18,7 +19,6 @@
         .screen.active { display: block; }
         .player-item { background: #2a2a2a; padding: 8px 12px; margin: 5px 0; border-radius: 4px; display: flex; justify-content: space-between; }
         
-        /* สไตล์สำหรับกล่อง Skill Check */
         #skillcheck-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.7); display: none;
@@ -118,7 +118,7 @@
 
     // ปุ่มสร้างห้อง
     document.getElementById('btn-create').addEventListener('click', () => {
-        myName = document.getElementById('input-name.value') || document.getElementById('input-name').value || 'Host';
+        myName = document.getElementById('input-name').value || 'Host';
         socket.emit('create-room', { playerName: myName }, (res) => {
             if (res.success) {
                 currentRoom = res.roomId;
@@ -212,10 +212,15 @@
     // ==========================================
     // ระบบแสดงและคำนวณ Skill Check Canvas (DBD Style)
     // ==========================================
-    socket.on('trigger-skillcheck', (settings) => {
+    socket.on('trigger-skillcheck', (data) => {
+        if (data.targetId !== 'all' && data.targetId !== socket.id) {
+            return;
+        }
+
         if (timeoutId) clearTimeout(timeoutId);
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
+        const settings = data.settings;
         scSpeed = settings.speed;
         scTotalCount = settings.count;
         scRemainingCount = scTotalCount;
@@ -239,7 +244,6 @@
         const zoneWidth = (Math.PI / 2.5) * sizeMultiplier;
         let minOffset = 2;
         let maxOffset = 3.5;
-        // สร้างโซนถัดไปข้างหน้าจากตำแหน่งเข็มปัจจุบันเสมอโดยไม่มีสะดุด
         scSuccessStart = scAngle + minOffset + (Math.random() * (maxOffset - minOffset));
         scSuccessEnd = scSuccessStart + zoneWidth;
 
@@ -290,13 +294,11 @@
         ctx.strokeStyle = '#e74c3c';
         ctx.stroke();
 
-        // หมุนเข็มเพิ่มขึ้นเรื่อยๆ อย่างต่อเนื่อง
         scAngle += scSpeed * 0.02;
 
-        // ถ้าปล่อยให้เข็มวิ่งเลยโซนไปโดยไม่กด ถือว่า FAIL อัตโนมัติทันที และสร้างโซนใหม่ต่อทันที
-        if (scAngle > scSuccessEnd) {
+        if (scAngle > scSuccessEnd + 0.5) {
             handleSkillCheckStep('FAIL');
-            if (!scActive) return; // ถ้าครบจำนวนรอบแล้ว ให้หยุดลูป
+            return;
         }
 
         animationFrameId = requestAnimationFrame(runSkillCheckLoop);
@@ -311,7 +313,6 @@
         } else if (scAngle >= scSuccessStart && scAngle <= scSuccessEnd) {
             result = 'SUCCESS';
         } else {
-            // กดก่อนถึงโซน ถือว่า FAIL ทันที
             result = 'FAIL';
         }
 
@@ -323,7 +324,6 @@
 
         const currentStep = scTotalCount - scRemainingCount + 1;
 
-        // ส่งผลลัพธ์แจ้งเตือนรอบปัจจุบันไปที่ Host
         socket.emit('skillcheck-result', { 
             roomId: currentRoom, 
             result, 
@@ -332,21 +332,20 @@
             total: scTotalCount
         });
 
-        // แสดงข้อความบนหน้าจอชั่วคราวแบบไม่หยุดเข็ม
         const fbEl = document.getElementById('feedback-text');
         if (fbEl) {
             fbEl.innerText = result;
             fbEl.style.color = result === 'PERFECT!' ? '#ffcc00' : (result === 'SUCCESS' ? '#5cb85c' : '#d9534f');
-            setTimeout(() => { if (scActive && fbEl) fbEl.innerText = ''; }, 200);
+            setTimeout(() => { if (fbEl) fbEl.innerText = ''; }, 200);
         }
 
         scRemainingCount--;
 
         if (scRemainingCount > 0) {
-            // สร้างโซนถัดไปล่วงหน้าทันทีโดยเข็มวิ่งหมุนต่อไปข้างหน้าไม่หยุด
+            scAngle = scSuccessStart - 1.5;
             spawnNewZone(scCurrentSize);
+            runSkillCheckLoop();
         } else {
-            // ครบทุกรอบแล้ว ปิดหน้าต่าง Skill Check
             scActive = false;
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
@@ -359,7 +358,6 @@
         }
     }
 
-    // รองรับการกด Spacebar บนคอมพิวเตอร์
     window.addEventListener('keydown', (e) => {
         if (e.code === 'Space' && scActive) {
             e.preventDefault();
@@ -367,7 +365,6 @@
         }
     });
 
-    // รองรับการแตะหน้าจอบบนมือถือ
     const overlayEl = document.getElementById('skillcheck-overlay');
     if (overlayEl) {
         overlayEl.addEventListener('click', () => {
