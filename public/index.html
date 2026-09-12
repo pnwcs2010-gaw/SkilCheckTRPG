@@ -106,6 +106,7 @@
     let scPerfectEnd = 0;
     let scRemainingCount = 1;
     let scTotalCount = 1;
+    let scCurrentSize = 1;
     let animationFrameId = null;
     let timeoutId = null;
 
@@ -199,7 +200,7 @@
     socket.on('player-result', ({ playerName, result, current, total }) => {
         const feed = document.getElementById('live-feed');
         const color = result === 'PERFECT!' ? '#ffcc00' : (result === 'SUCCESS' ? '#5cb85c' : '#d9534f');
-        const stepText = total > 1 ? ` [กดครั้งที่ ${current}/${total}]` : '';
+        const stepText = total > 1 ? ` [รอบที่ ${current}/${total}]` : '';
         feed.innerHTML = `<span style="color:${color}">${playerName}: ${result}${stepText}</span><br>` + feed.innerHTML;
     });
 
@@ -218,6 +219,7 @@
         scSpeed = settings.speed;
         scTotalCount = settings.count;
         scRemainingCount = scTotalCount;
+        scCurrentSize = settings.size;
         
         const overlay = document.getElementById('skillcheck-overlay');
         overlay.style.display = 'flex';
@@ -228,7 +230,7 @@
 
         scActive = true;
         scAngle = 0;
-        spawnNewZone(settings.size);
+        spawnNewZone(scCurrentSize);
 
         runSkillCheckLoop();
     });
@@ -290,7 +292,7 @@
         // หมุนเข็มเพิ่มขึ้นเรื่อยๆ
         scAngle += scSpeed * 0.02;
 
-        // ถ้าเข็มวิ่งเลยขอบเขตโซนเป้าหมายไปโดยไม่กด ถือว่า FAIL ทันที
+        // ถ้าเข็มวิ่งเลยขอบเขตโซนเป้าหมายไปโดยไม่กด ถือว่า FAIL รอบนี้ทันที
         if (scAngle > scSuccessEnd) {
             handleSkillCheckComplete('FAIL');
             return;
@@ -325,7 +327,7 @@
 
         const currentStep = scTotalCount - scRemainingCount + 1;
 
-        // ส่งผลลัพธ์แจ้งเตือนไปที่บอร์ดห้อง (Host) ทันที
+        // ส่งผลลัพธ์แจ้งเตือนรอบปัจจุบันไปที่บอร์ดห้อง (Host)
         socket.emit('skillcheck-result', { 
             roomId: currentRoom, 
             result, 
@@ -334,24 +336,26 @@
             total: scTotalCount
         });
 
-        if (result !== 'FAIL' && scRemainingCount > 1) {
-            // ถ้ายังกดต่อเนื่องไม่ครบ และกดโดน ให้เปิดรอบย่อยถัดไปทันที
-            scRemainingCount--;
+        // ลดจำนวนรอบที่เหลือลง
+        scRemainingCount--;
+
+        if (scRemainingCount > 0) {
+            // แม้จะ Fail หรือ Success ก็จะเปิดรอบถัดไปต่อจนกว่าจะครบจำนวน Count ที่ตั้งไว้
             setTimeout(() => {
                 if (fbEl) fbEl.innerText = '';
                 scActive = true;
                 scAngle = 0;
-                spawnNewZone(parseFloat(document.getElementById('setting-size').value));
+                spawnNewZone(scCurrentSize);
                 runSkillCheckLoop();
-            }, 300);
+            }, 400); // ดีเลย์สั้นๆ ให้ผู้เล่นเห็นผลลัพธ์รอบนี้ก่อนขึ้นรอบถัดไป
         } else {
-            // ปิดหน้าต่างเมื่อจบเกมย่อยนี้
+            // ครบทุกรอบแล้ว ปิดหน้าต่าง Skill Check
             if (timeoutId) clearTimeout(timeoutId);
             timeoutId = setTimeout(() => {
                 const overlay = document.getElementById('skillcheck-overlay');
                 overlay.style.display = 'none';
                 overlay.style.pointerEvents = 'none';
-            }, 800);
+            }, 900);
         }
     }
 
