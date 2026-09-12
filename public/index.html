@@ -229,7 +229,7 @@
         if (fbEl) fbEl.innerText = '';
 
         scActive = true;
-        scAngle = 0; // เริ่มต้นที่ 0 เฉพาะครั้งแรกสุดที่ Pop-up เด้งขึ้นมา
+        scAngle = 0;
         spawnNewZone(scCurrentSize);
 
         runSkillCheckLoop();
@@ -239,7 +239,6 @@
         const zoneWidth = (Math.PI / 2.5) * sizeMultiplier;
         let minOffset = 1.0;
         let maxOffset = 3.5;
-        // สร้างโซนถัดไปโดยอิงจากตำแหน่งมุมปัจจุบันของเข็ม (scAngle) ไม่รีเซ็ตกลับไปจุดเริ่มต้น
         scSuccessStart = scAngle + minOffset + (Math.random() * (maxOffset - minOffset));
         scSuccessEnd = scSuccessStart + zoneWidth;
 
@@ -290,12 +289,12 @@
         ctx.strokeStyle = '#e74c3c';
         ctx.stroke();
 
-        // หมุนเข็มเพิ่มขึ้นเรื่อยๆ ตามเดิม
+        // หมุนเข็มเพิ่มขึ้นเรื่อยๆ
         scAngle += scSpeed * 0.02;
 
-        // ถ้าเข็มวิ่งเลยขอบเขตโซนเป้าหมายไปโดยไม่กด ถือว่า FAIL รอบนี้ทันที
+        // ถ้าเข็มวิ่งเลยขอบเขตโซนเป้าหมายไปโดยไม่กด ถือว่า FAIL ทันทีและเปลี่ยนรอบต่อเนื่องทันที
         if (scAngle > scSuccessEnd) {
-            handleSkillCheckComplete('FAIL');
+            handleSkillCheckStep('FAIL');
             return;
         }
 
@@ -312,19 +311,11 @@
             result = 'SUCCESS';
         }
 
-        handleSkillCheckComplete(result);
+        handleSkillCheckStep(result);
     }
 
-    function handleSkillCheckComplete(result) {
+    function handleSkillCheckStep(result) {
         if (!scActive) return;
-        scActive = false;
-        if (animationFrameId) cancelAnimationFrame(animationFrameId);
-
-        const fbEl = document.getElementById('feedback-text');
-        if (fbEl) {
-            fbEl.innerText = result;
-            fbEl.style.color = result === 'PERFECT!' ? '#ffcc00' : (result === 'SUCCESS' ? '#5cb85c' : '#d9534f');
-        }
 
         const currentStep = scTotalCount - scRemainingCount + 1;
 
@@ -337,25 +328,30 @@
             total: scTotalCount
         });
 
-        // ลดจำนวนรอบที่เหลือลง
+        // แสดงข้อความสั้นๆ บนหน้าจอแบบไม่หยุดการหมุน
+        const fbEl = document.getElementById('feedback-text');
+        if (fbEl) {
+            fbEl.innerText = result;
+            fbEl.style.color = result === 'PERFECT!' ? '#ffcc00' : (result === 'SUCCESS' ? '#5cb85c' : '#d9534f');
+            setTimeout(() => { if (scActive && fbEl) fbEl.innerText = ''; }, 250);
+        }
+
         scRemainingCount--;
 
         if (scRemainingCount > 0) {
-            // ไปรอบถัดไปทันทีโดยเข็มจะหมุนต่อจากมุมปัจจุบัน (ไม่รีเซ็ต scAngle เป็น 0)
-            setTimeout(() => {
-                if (fbEl) fbEl.innerText = '';
-                scActive = true;
-                spawnNewZone(scCurrentSize);
-                runSkillCheckLoop();
-            }, 300);
+            // สร้างโซนถัดไปทันทีโดยเข็มหมุนต่อไปข้างหน้าไม่หยุด
+            spawnNewZone(scCurrentSize);
         } else {
             // ครบทุกรอบแล้ว ปิดหน้าต่าง Skill Check
+            scActive = false;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
             if (timeoutId) clearTimeout(timeoutId);
             timeoutId = setTimeout(() => {
                 const overlay = document.getElementById('skillcheck-overlay');
                 overlay.style.display = 'none';
                 overlay.style.pointerEvents = 'none';
-            }, 800);
+            }, 500);
         }
     }
 
