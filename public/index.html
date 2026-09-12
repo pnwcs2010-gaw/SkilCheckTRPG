@@ -229,7 +229,7 @@
         if (fbEl) fbEl.innerText = '';
 
         scActive = true;
-        scAngle = 0;
+        scAngle = 0; // เริ่มต้นที่ 0 เฉพาะครั้งแรกสุดที่ Pop-up เด้งขึ้นมา
         spawnNewZone(scCurrentSize);
 
         runSkillCheckLoop();
@@ -239,6 +239,7 @@
         const zoneWidth = (Math.PI / 2.5) * sizeMultiplier;
         let minOffset = 1.0;
         let maxOffset = 3.5;
+        // สร้างโซนถัดไปโดยอิงจากตำแหน่งมุมปัจจุบันของเข็ม (scAngle) ไม่รีเซ็ตกลับไปจุดเริ่มต้น
         scSuccessStart = scAngle + minOffset + (Math.random() * (maxOffset - minOffset));
         scSuccessEnd = scSuccessStart + zoneWidth;
 
@@ -289,7 +290,7 @@
         ctx.strokeStyle = '#e74c3c';
         ctx.stroke();
 
-        // หมุนเข็มเพิ่มขึ้นเรื่อยๆ
+        // หมุนเข็มเพิ่มขึ้นเรื่อยๆ ตามเดิม
         scAngle += scSpeed * 0.02;
 
         // ถ้าเข็มวิ่งเลยขอบเขตโซนเป้าหมายไปโดยไม่กด ถือว่า FAIL รอบนี้ทันที
@@ -340,14 +341,13 @@
         scRemainingCount--;
 
         if (scRemainingCount > 0) {
-            // แม้จะ Fail หรือ Success ก็จะเปิดรอบถัดไปต่อจนกว่าจะครบจำนวน Count ที่ตั้งไว้
+            // ไปรอบถัดไปทันทีโดยเข็มจะหมุนต่อจากมุมปัจจุบัน (ไม่รีเซ็ต scAngle เป็น 0)
             setTimeout(() => {
                 if (fbEl) fbEl.innerText = '';
                 scActive = true;
-                scAngle = 0;
                 spawnNewZone(scCurrentSize);
                 runSkillCheckLoop();
-            }, 400); // ดีเลย์สั้นๆ ให้ผู้เล่นเห็นผลลัพธ์รอบนี้ก่อนขึ้นรอบถัดไป
+            }, 300);
         } else {
             // ครบทุกรอบแล้ว ปิดหน้าต่าง Skill Check
             if (timeoutId) clearTimeout(timeoutId);
@@ -355,7 +355,7 @@
                 const overlay = document.getElementById('skillcheck-overlay');
                 overlay.style.display = 'none';
                 overlay.style.pointerEvents = 'none';
-            }, 900);
+            }, 800);
         }
     }
 
