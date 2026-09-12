@@ -87,6 +87,11 @@ io.on('connection', (socket) => {
             }
         }
     });
+
+    // สัญญาณแจ้งว่าผู้เล่นเล่นจบครบทุกรอบแล้ว ให้ปิดหน้าจอผู้ชมทั้งหมด
+    socket.on('spectate-end', (data) => {
+        socket.to(data.roomId).emit('spectate-end');
+    });
 });
 
 const PORT = process.env.PORT || 3000;
