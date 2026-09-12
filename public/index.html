@@ -215,7 +215,6 @@
         scRemainingCount = scTotalCount;
         scCurrentSize = settings.size;
         
-        // เช็กสิทธิ์: ถ้าส่งมาที่เราคนเดียว หรือส่งมาหา "ทุกคนในห้อง" (all)
         isMyTurn = (data.targetId === socket.id || data.targetId === 'all');
         
         const overlay = document.getElementById('skillcheck-overlay');
@@ -234,7 +233,7 @@
         if (fbEl) fbEl.innerText = '';
 
         scActive = true;
-        scAngle = 0;
+        scAngle = 0; // <--- สำคัญ: รีเซ็ตเข็มมาที่จุดเริ่มต้น (0) เสมอ
         spawnNewZone(scCurrentSize);
 
         if (isMyTurn) {
