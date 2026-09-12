@@ -92,7 +92,7 @@ io.on('connection', (socket) => {
         socket.to(data.roomId).emit('spectate-sync', data);
     });
     socket.on('spectate-result', (data) => {
-    socket.to(data.roomId).emit('spectate-result', data);
+        socket.to(data.roomId).emit('spectate-result', data);
     });
 });
 
