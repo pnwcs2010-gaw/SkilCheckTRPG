@@ -48,22 +48,6 @@ io.on('connection', (socket) => {
             });
         }
     });
-
-    // ซิงค์ตำแหน่งเข็มแบบเรียลไทม์ให้ผู้ชม
-    socket.on('spectate-sync', (data) => {
-        socket.to(data.roomId).emit('spectate-sync', data);
-    });
-
-    // ซิงค์ผลลัพธ์การกด (Success / Perfect / Fail)
-    socket.on('spectate-result', (data) => {
-        socket.to(data.roomId).emit('spectate-result', data);
-    });
-
-    // สัญญาณปิดหน้าจอเมื่อเล่นครบทุกรอบ
-    socket.on('spectate-end', (data) => {
-        socket.to(data.roomId).emit('spectate-end');
-    });
-
     socket.on('skillcheck-result', (data) => {
         io.to(data.roomId).emit('player-result', data);
     });
