@@ -320,13 +320,12 @@
 
         scAngle += scSpeed * 0.02;
 
-        // ถ้าเลยโซนโดยไม่กด นับเป็น FAIL ทันที
         if (scAngle > scSuccessEnd) {
             handleSkillCheckStep('FAIL');
             if (!scActive) return;
         }
 
-        // ส่งพิกัดให้คนอื่นดูแบบเรียลไทม์
+        // ส่งพิกัดให้ผู้ชมคนอื่นในห้องเห็นแบบเรียลไทม์
         socket.emit('spectate-sync', {
             roomId: currentRoom,
             scAngle,
