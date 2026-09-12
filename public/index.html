@@ -217,8 +217,7 @@
         scSpeed = settings.speed;
         scTotalCount = settings.count;
         scRemainingCount = scTotalCount;
-        spawnNewZone(settings.size);
-
+        
         const overlay = document.getElementById('skillcheck-overlay');
         overlay.style.display = 'flex';
         overlay.style.pointerEvents = 'auto';
@@ -228,15 +227,16 @@
 
         scActive = true;
         scAngle = 0; // เริ่มหมุนจากมุม 0 ครั้งแรกสุด
+        spawnNewZone(settings.size);
 
         runSkillCheckLoop();
     });
 
     function spawnNewZone(sizeMultiplier) {
         const zoneWidth = (Math.PI / 2.5) * sizeMultiplier;
-        // สุ่มตำแหน่งใหม่ให้อยู่ถัดไปข้างหน้า (ห่างจากเข็มปัจจุบันอย่างน้อย 1 เรเดียน และไม่เกิน 4 เรเดียน)
+        // สุ่มตำแหน่งโซนถัดไปให้อยู่ข้างหน้าเข็มปัจจุบัน (ห่างออกไป 1.0 ถึง 3.5 เรเดียน)
         let minOffset = 1.0;
-        let maxOffset = Math.PI * 1.5;
+        let maxOffset = 3.5;
         scSuccessStart = scAngle + minOffset + (Math.random() * (maxOffset - minOffset));
         scSuccessEnd = scSuccessStart + zoneWidth;
 
@@ -290,7 +290,7 @@
         // หมุนเข็มเพิ่มขึ้นเรื่อยๆ
         scAngle += scSpeed * 0.02;
 
-        // ถ้าเข็มวิ่งเลยโซนเป้าหมายไปแล้วโดยที่ผู้เล่นไม่กด ถือว่า FAIL ทันที
+        // ถ้าเข็มวิ่งเลยขอบเขตโซนเป้าหมายไปแล้วโดยที่ผู้เล่นไม่กด ถือว่า FAIL ทันที
         if (scAngle > scSuccessEnd) {
             endSkillCheck('FAIL');
             return;
@@ -302,7 +302,7 @@
     function handlePlayerInput() {
         if (!scActive) return;
 
-        // เช็คว่ากดโดนช่วงไหน
+        // เช็คผลลัพธ์ว่ากดโดนช่วงไหน
         let result = 'FAIL';
         if (scAngle >= scPerfectStart && scAngle <= scPerfectEnd) {
             result = 'PERFECT!';
@@ -313,7 +313,7 @@
         const fbEl = document.getElementById('feedback-text');
 
         if (result === 'FAIL') {
-            // ถ้ากดพลาด จบทันที
+            // ถ้ากดพลาด (นอกโซน) จบทันที
             scActive = false;
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
@@ -335,14 +335,14 @@
             scRemainingCount--;
 
             if (scRemainingCount > 0) {
-                // แสดงข้อความสั้นๆ แล้วสุ่มเกิดโซนใหม่ทันทีโดยไม่ต้องรีเซ็ตเข็มหรือหยุดหมุน
+                // แสดงข้อความสแว๊กชั่วคราว แล้วสุ่มสร้างโซนใหม่ให้เข็มวิ่งต่อเนื่องไปรอบต่อไปทันที
                 if (fbEl) {
                     fbEl.innerText = result;
                     fbEl.style.color = result === 'PERFECT!' ? '#ffcc00' : '#5cb85c';
                 }
-                setTimeout(() => { if (scActive && fbEl.innerText === result) fbEl.innerText = ''; }, 300);
+                setTimeout(() => { if (scActive && fbEl) fbEl.innerText = ''; }, 300);
 
-                // สุ่มสร้างโซนถัดไปบนเส้นทางข้างหน้าโดยเข็มยังวิ่งต่อเนือง
+                // สุ่มตำแหน่งโซนถัดไปบนเส้นทางข้างหน้าโดยไม่รีเซ็ตเข็ม
                 spawnNewZone(parseFloat(document.getElementById('setting-size').value));
             } else {
                 // ครบจำนวนครั้งที่ตั้งไว้ทั้งหมด ถือว่าชนะสำเร็จ
@@ -374,7 +374,7 @@
         }
     });
 
-    // รองรับการแตะหน้าจอบบนมือถือ
+    // รองรับการแตะหน้าจอจอบบนมือถือ
     const overlayEl = document.getElementById('skillcheck-overlay');
     if (overlayEl) {
         overlayEl.addEventListener('click', () => {
@@ -382,7 +382,7 @@
                 handlePlayerInput();
             }
         });
-    };
+    }
 </script>
 
 </body>
