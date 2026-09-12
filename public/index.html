@@ -68,7 +68,7 @@
 
         <h3>รายชื่อผู้เล่นในห้อง</h3>
         <div id="player-list"></div>
-        <div id="live-feed" style="margin-top: 15px; font-size: 14px; color: #aaa;"></div>
+        <div id="live-feed" style="margin-top: 15px; font-size: 14px; color: #aaa; max-height: 150px; overflow-y: auto;"></div>
     </div>
 
     <!-- หน้าจอรอลูกห้อง -->
@@ -195,11 +195,12 @@
         });
     });
 
-    // รับผลลัพธ์จากลูกห้อง (แสดงที่จอ Host)
-    socket.on('player-result', ({ playerName, result }) => {
+    // รับผลลัพธ์จากลูกห้อง (แสดงที่บอร์ด Host แบบ Real-time ทุกครั้งที่กด)
+    socket.on('player-result', ({ playerName, result, current, total }) => {
         const feed = document.getElementById('live-feed');
         const color = result === 'PERFECT!' ? '#ffcc00' : (result === 'SUCCESS' ? '#5cb85c' : '#d9534f');
-        feed.innerHTML = `<span style="color:${color}">${playerName}: ${result}</span><br>` + feed.innerHTML;
+        const stepText = total > 1 ? ` [กดครั้งที่ ${current}/${total}]` : '';
+        feed.innerHTML = `<span style="color:${color}">${playerName}: ${result}${stepText}</span><br>` + feed.innerHTML;
     });
 
     socket.on('host-disconnected', () => {
@@ -226,7 +227,7 @@
         if (fbEl) fbEl.innerText = '';
 
         scActive = true;
-        scAngle = 0; // เริ่มหมุนจากมุม 0 ครั้งแรกสุด
+        scAngle = 0;
         spawnNewZone(settings.size);
 
         runSkillCheckLoop();
@@ -234,7 +235,6 @@
 
     function spawnNewZone(sizeMultiplier) {
         const zoneWidth = (Math.PI / 2.5) * sizeMultiplier;
-        // สุ่มตำแหน่งโซนถัดไปให้อยู่ข้างหน้าเข็มปัจจุบัน (ห่างออกไป 1.0 ถึง 3.5 เรเดียน)
         let minOffset = 1.0;
         let maxOffset = 3.5;
         scSuccessStart = scAngle + minOffset + (Math.random() * (maxOffset - minOffset));
@@ -290,9 +290,9 @@
         // หมุนเข็มเพิ่มขึ้นเรื่อยๆ
         scAngle += scSpeed * 0.02;
 
-        // ถ้าเข็มวิ่งเลยขอบเขตโซนเป้าหมายไปแล้วโดยที่ผู้เล่นไม่กด ถือว่า FAIL ทันที
+        // ถ้าเข็มวิ่งเลยขอบเขตโซนเป้าหมายไปโดยไม่กด ถือว่า FAIL ทันที
         if (scAngle > scSuccessEnd) {
-            endSkillCheck('FAIL');
+            handleSkillCheckComplete('FAIL');
             return;
         }
 
@@ -302,7 +302,6 @@
     function handlePlayerInput() {
         if (!scActive) return;
 
-        // เช็คผลลัพธ์ว่ากดโดนช่วงไหน
         let result = 'FAIL';
         if (scAngle >= scPerfectStart && scAngle <= scPerfectEnd) {
             result = 'PERFECT!';
@@ -310,59 +309,49 @@
             result = 'SUCCESS';
         }
 
+        handleSkillCheckComplete(result);
+    }
+
+    function handleSkillCheckComplete(result) {
+        if (!scActive) return;
+        scActive = false;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
         const fbEl = document.getElementById('feedback-text');
+        if (fbEl) {
+            fbEl.innerText = result;
+            fbEl.style.color = result === 'PERFECT!' ? '#ffcc00' : (result === 'SUCCESS' ? '#5cb85c' : '#d9534f');
+        }
 
-        if (result === 'FAIL') {
-            // ถ้ากดพลาด (นอกโซน) จบทันที
-            scActive = false;
-            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        const currentStep = scTotalCount - scRemainingCount + 1;
 
-            if (fbEl) {
-                fbEl.innerText = result;
-                fbEl.style.color = '#d9534f';
-            }
+        // ส่งผลลัพธ์แจ้งเตือนไปที่บอร์ดห้อง (Host) ทันที
+        socket.emit('skillcheck-result', { 
+            roomId: currentRoom, 
+            result, 
+            playerName: myName,
+            current: currentStep,
+            total: scTotalCount
+        });
 
-            socket.emit('skillcheck-result', { roomId: currentRoom, result, playerName: myName });
-
+        if (result !== 'FAIL' && scRemainingCount > 1) {
+            // ถ้ายังกดต่อเนื่องไม่ครบ และกดโดน ให้เปิดรอบย่อยถัดไปทันที
+            scRemainingCount--;
+            setTimeout(() => {
+                if (fbEl) fbEl.innerText = '';
+                scActive = true;
+                scAngle = 0;
+                spawnNewZone(parseFloat(document.getElementById('setting-size').value));
+                runSkillCheckLoop();
+            }, 300);
+        } else {
+            // ปิดหน้าต่างเมื่อจบเกมย่อยนี้
             if (timeoutId) clearTimeout(timeoutId);
             timeoutId = setTimeout(() => {
                 const overlay = document.getElementById('skillcheck-overlay');
                 overlay.style.display = 'none';
                 overlay.style.pointerEvents = 'none';
             }, 800);
-        } else {
-            // ถ้ากดโดน (SUCCESS หรือ PERFECT!)
-            scRemainingCount--;
-
-            if (scRemainingCount > 0) {
-                // แสดงข้อความสแว๊กชั่วคราว แล้วสุ่มสร้างโซนใหม่ให้เข็มวิ่งต่อเนื่องไปรอบต่อไปทันที
-                if (fbEl) {
-                    fbEl.innerText = result;
-                    fbEl.style.color = result === 'PERFECT!' ? '#ffcc00' : '#5cb85c';
-                }
-                setTimeout(() => { if (scActive && fbEl) fbEl.innerText = ''; }, 300);
-
-                // สุ่มตำแหน่งโซนถัดไปบนเส้นทางข้างหน้าโดยไม่รีเซ็ตเข็ม
-                spawnNewZone(parseFloat(document.getElementById('setting-size').value));
-            } else {
-                // ครบจำนวนครั้งที่ตั้งไว้ทั้งหมด ถือว่าชนะสำเร็จ
-                scActive = false;
-                if (animationFrameId) cancelAnimationFrame(animationFrameId);
-
-                if (fbEl) {
-                    fbEl.innerText = result;
-                    fbEl.style.color = result === 'PERFECT!' ? '#ffcc00' : '#5cb85c';
-                }
-
-                socket.emit('skillcheck-result', { roomId: currentRoom, result, playerName: myName });
-
-                if (timeoutId) clearTimeout(timeoutId);
-                timeoutId = setTimeout(() => {
-                    const overlay = document.getElementById('skillcheck-overlay');
-                    overlay.style.display = 'none';
-                    overlay.style.pointerEvents = 'none';
-                }, 800);
-            }
         }
     }
 
