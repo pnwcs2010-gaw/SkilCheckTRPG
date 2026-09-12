@@ -1,20 +1,16 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// เปิดให้ใช้ไฟล์ในโฟลเดอร์ public
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname));
 
-// เก็บข้อมูลห้อง: { roomId: { host: socketId, players: [{id, name}], settings } }
 const rooms = {};
 
 io.on('connection', (socket) => {
-    // สร้างห้อง
     socket.on('create-room', ({ playerName }, callback) => {
         const roomId = Math.random().toString(36).substring(2, 7).toUpperCase();
         rooms[roomId] = {
@@ -25,7 +21,6 @@ io.on('connection', (socket) => {
         callback({ success: true, roomId, players: rooms[roomId].players });
     });
 
-    // เข้าร่วมห้อง
     socket.on('join-room', ({ roomId, playerName }, callback) => {
         roomId = roomId.toUpperCase();
         if (rooms[roomId]) {
@@ -38,7 +33,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ส่ง Skill Check ไปหาผู้เล่น (เพิ่มการดึงชื่อคนรับเพื่อให้หน้าจอเพื่อนแสดงชื่อถูก)
     socket.on('send-skillcheck', ({ roomId, targetId, settings }) => {
         if (rooms[roomId]) {
             let targetName = "ทุกคนในห้อง";
@@ -55,22 +49,25 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ซิงค์การหมุนของเข็มให้คนอื่นเห็นแบบเรียลไทม์ (Spectate Mode)
+    // ซิงค์ตำแหน่งเข็มแบบเรียลไทม์ให้ผู้ชม
     socket.on('spectate-sync', (data) => {
         socket.to(data.roomId).emit('spectate-sync', data);
     });
 
-    // ซิงค์ผลลัพธ์การกด (Success / Perfect / Fail) ให้คนอื่นเห็นเอฟเฟกต์พร้อมกัน
+    // ซิงค์ผลลัพธ์การกด (Success / Perfect / Fail)
     socket.on('spectate-result', (data) => {
         socket.to(data.roomId).emit('spectate-result', data);
     });
 
-    // รับผลลัพธ์ไปแสดงที่ Live Feed ของ Host
+    // สัญญาณปิดหน้าจอเมื่อเล่นครบทุกรอบ
+    socket.on('spectate-end', (data) => {
+        socket.to(data.roomId).emit('spectate-end');
+    });
+
     socket.on('skillcheck-result', (data) => {
         io.to(data.roomId).emit('player-result', data);
     });
 
-    // ออกจากห้อง / ตัดการเชื่อมต่อ
     socket.on('disconnect', () => {
         for (let roomId in rooms) {
             let room = rooms[roomId];
@@ -86,11 +83,6 @@ io.on('connection', (socket) => {
                 break;
             }
         }
-    });
-
-    // สัญญาณแจ้งว่าผู้เล่นเล่นจบครบทุกรอบแล้ว ให้ปิดหน้าจอผู้ชมทั้งหมด
-    socket.on('spectate-end', (data) => {
-        socket.to(data.roomId).emit('spectate-end');
     });
 });
 
