@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TRPG Custom Skill Check Online</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #121212; color: #e0e0e0; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { width: 100%; max-width: 600px; background: #1e1e1e; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
+        h1, h2 { text-align: center; color: #fff; }
+        input, select, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; font-size: 16px; }
+        button { background: #d9534f; border: none; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        button:hover { background: #c9302c; }
+        button.secondary { background: #337ab7; }
+        button.secondary:hover { background: #286090; }
+        .screen { display: none; }
+        .screen.active { display: block; }
+        .player-item { background: #2a2a2a; padding: 8px 12px; margin: 5px 0; border-radius: 4px; display: flex; justify-content: space-between; }
+        
+        /* สไตล์สำหรับกล่อง Skill Check */
+        #skillcheck-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); display: none;
+            justify-content: center; align-items: center; z-index: 999;
+        }
+        canvas { background: transparent; }
+        #feedback-text { position: absolute; font-size: 32px; font-weight: bold; text-shadow: 2px 2px 4px #000; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- หน้าจอเข้าสู่ระบบ / สร้างห้อง -->
+    <div id="screen-login" class="screen active">
+        <h1>DBD Custom Skill Check</h1>
+        <input type="text" id="input-name" placeholder="ชื่อของคุณ" value="Player">
+        <button id="btn-create" class="secondary">สร้างห้องใหม่ (Host)</button>
+        <hr style="border-color: #444; margin: 20px 0;">
+        <input type="text" id="input-room" placeholder="รหัสห้อง 5 หลัก">
+        <button id="btn-join">เข้าร่วมห้อง</button>
+    </div>
+
+    <!-- หน้าจอควบคุมสำหรับ Host -->
+    <div id="screen-host" class="screen">
+        <h2>แดชบอร์ดหัวหน้าห้อง</h2>
+        <p>รหัสห้อง: <strong id="display-room-code" style="color: #ffcc00; font-size: 24px;"></strong></p>
+        
+        <div style="background: #252525; padding: 15px; border-radius: 8px; margin-top: 15px;">
+            <h3>ตั้งค่าสกิลเช็ค</h3>
+            
+            <label>ความเร็วเข็ม (Speed): <span id="val-speed" style="color: #ffcc00; font-weight: bold;">3</span></label>
+            <input type="range" id="setting-speed" min="1" max="5" value="3" oninput="document.getElementById('val-speed').innerText = this.value">
+            
+            <label style="margin-top: 10px; display: block;">ขนาดโซนสำเร็จ (Size multiplier): <span id="val-size" style="color: #ffcc00; font-weight: bold;">1</span>x</label>
+            <input type="range" id="setting-size" min="0.5" max="2" step="0.1" value="1" oninput="document.getElementById('val-size').innerText = this.value">
+            
+            <label style="margin-top: 10px; display: block;">จำนวนครั้งที่ต้องกดต่อเนื่อง (Count): <span id="val-count" style="color: #ffcc00; font-weight: bold;">1</span> ครั้ง</label>
+            <input type="range" id="setting-count" min="1" max="12" value="1" oninput="document.getElementById('val-count').innerText = this.value">
+            
+            <label style="margin-top: 10px; display: block;">ส่งไปที่:</label>
+            <select id="setting-target">
+                <option value="all">ทุกคนในห้อง</option>
+            </select>
+            
+            <button id="btn-trigger" style="background: #5cb85c; margin-top: 15px;">ส่งสกิลเช็ค!</button>
+        </div>
+
+        <h3>รายชื่อผู้เล่นในห้อง</h3>
+        <div id="player-list"></div>
+        <div id="live-feed" style="margin-top: 15px; font-size: 14px; color: #aaa; max-height: 150px; overflow-y: auto;"></div>
+    </div>
+
+    <!-- หน้าจอรอลูกห้อง -->
+    <div id="screen-waiting" class="screen">
+        <h2>รอหัวหน้าห้องเริ่มสกิลเช็ค...</h2>
+        <p>ห้อง: <strong id="waiting-room-code"></strong></p>
+        <h3>รายชื่อเพื่อนร่วมห้อง:</h3>
+        <div id="waiting-player-list"></div>
+    </div>
+</div>
+
+<!-- หน้าต่างแสดงวงกลม Skill Check เมื่อถูกส่งมา -->
+<div id="skillcheck-overlay">
+    <div style="position: relative; display: flex; justify-content: center; align-items: center;">
+        <canvas id="sc-canvas" width="300" height="300"></canvas>
+        <div id="feedback-text"></div>
+    </div>
+</div>
+
+<!-- Socket.io Client Library -->
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io();
+    let currentRoom = null;
+    let myName = '';
+    let isHost = false;
+
+    // ตัวแปรควบคุมระบบ Skill Check Canvas
+    let scActive = false;
+    let scAngle = 0;
+    let scSpeed = 1;
+    let scSuccessStart = 0;
+    let scSuccessEnd = 0;
+    let scPerfectStart = 0;
+    let scPerfectEnd = 0;
+    let scRemainingCount = 1;
+    let scTotalCount = 1;
+    let scCurrentSize = 1;
+    let animationFrameId = null;
+    let timeoutId = null;
+
+    // เปลี่ยนหน้าจอ UI
+    function showScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+    }
+
+    // ปุ่มสร้างห้อง
+    document.getElementById('btn-create').addEventListener('click', () => {
+        myName = document.getElementById('input-name.value') || document.getElementById('input-name').value || 'Host';
+        socket.emit('create-room', { playerName: myName }, (res) => {
+            if (res.success) {
+                currentRoom = res.roomId;
+                isHost = true;
+                document.getElementById('display-room-code').innerText = currentRoom;
+                updatePlayerListHost(res.players);
+                showScreen('screen-host');
+            }
+        });
+    });
+
+    // ปุ่มเข้าร่วมห้อง
+    document.getElementById('btn-join').addEventListener('click', () => {
+        myName = document.getElementById('input-name').value || 'Player';
+        const roomId = document.getElementById('input-room').value.toUpperCase();
+        if (!roomId) return alert('กรุณากรอกรหัสห้อง');
+
+        socket.emit('join-room', { roomId, playerName: myName }, (res) => {
+            if (res.success) {
+                currentRoom = roomId;
+                isHost = false;
+                document.getElementById('waiting-room-code').innerText = currentRoom;
+                updatePlayerListWaiting(res.players);
+                showScreen('screen-waiting');
+            } else {
+                alert(res.message);
+            }
+        });
+    });
+
+    // อัปเดตรายชื่อฝั่ง Host
+    function updatePlayerListHost(players) {
+        const listEl = document.getElementById('player-list');
+        const selectEl = document.getElementById('setting-target');
+        
+        listEl.innerHTML = '';
+        selectEl.innerHTML = '<option value="all">ทุกคนในห้อง</option>';
+
+        players.forEach(p => {
+            listEl.innerHTML += `<div class="player-item"><span>${p.name}</span><span>${p.id === socket.id ? '(คุณ - Host)' : ''}</span></div>`;
+            if (p.id !== socket.id) {
+                selectEl.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+            }
+        });
+    }
+
+    // อัปเดตรายชื่อฝั่งผู้เล่นทั่วไป
+    function updatePlayerListWaiting(players) {
+        const listEl = document.getElementById('waiting-player-list');
+        listEl.innerHTML = '';
+        players.forEach(p => {
+            listEl.innerHTML += `<div class="player-item"><span>${p.name}</span><span>${p.id === socket.id ? '(คุณ)' : ''}</span></div>`;
+        });
+    }
+
+    socket.on('update-players', (players) => {
+        if (isHost) {
+            updatePlayerListHost(players);
+        } else {
+            updatePlayerListWaiting(players);
+        }
+    });
+
+    // Host กดปุ่มส่ง Skill Check
+    document.getElementById('btn-trigger').addEventListener('click', () => {
+        const speed = parseFloat(document.getElementById('setting-speed').value);
+        const size = parseFloat(document.getElementById('setting-size').value);
+        const count = parseInt(document.getElementById('setting-count').value);
+        const targetId = document.getElementById('setting-target').value;
+
+        socket.emit('send-skillcheck', {
+            roomId: currentRoom,
+            targetId,
+            settings: { speed, size, count }
+        });
+    });
+
+    // รับผลลัพธ์จากลูกห้อง (แสดงที่บอร์ด Host แบบ Real-time)
+    socket.on('player-result', ({ playerName, result, current, total }) => {
+        const feed = document.getElementById('live-feed');
+        const color = result === 'PERFECT!' ? '#ffcc00' : (result === 'SUCCESS' ? '#5cb85c' : '#d9534f');
+        const stepText = total > 1 ? ` [รอบที่ ${current}/${total}]` : '';
+        feed.innerHTML = `<span style="color:${color}">${playerName}: ${result}${stepText}</span><br>` + feed.innerHTML;
+    });
+
+    socket.on('host-disconnected', () => {
+        alert('หัวหน้าห้องออกจากเกม / หลุดการเชื่อมต่อ');
+        location.reload();
+    });
+
+    // ==========================================
+    // ระบบแสดงและคำนวณ Skill Check Canvas (DBD Style)
+    // ==========================================
+    socket.on('trigger-skillcheck', (settings) => {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+        scSpeed = settings.speed;
+        scTotalCount = settings.count;
+        scRemainingCount = scTotalCount;
+        scCurrentSize = settings.size;
+        
+        const overlay = document.getElementById('skillcheck-overlay');
+        overlay.style.display = 'flex';
+        overlay.style.pointerEvents = 'auto';
+        
+        const fbEl = document.getElementById('feedback-text');
+        if (fbEl) fbEl.innerText = '';
+
+        scActive = true;
+        scAngle = 0;
+        spawnNewZone(scCurrentSize);
+
+        runSkillCheckLoop();
+    });
+
+    function spawnNewZone(sizeMultiplier) {
+        const zoneWidth = (Math.PI / 2.5) * sizeMultiplier;
+        let minOffset = 1.2;
+        let maxOffset = 3.5;
+        // สร้างโซนถัดไปข้างหน้าจากตำแหน่งเข็มปัจจุบันเสมอโดยไม่มีสะดุด
+        scSuccessStart = scAngle + minOffset + (Math.random() * (maxOffset - minOffset));
+        scSuccessEnd = scSuccessStart + zoneWidth;
+
+        const perfectWidth = Math.PI / 9;
+        scPerfectStart = scSuccessStart + (zoneWidth / 2) - (perfectWidth / 2);
+        scPerfectEnd = scPerfectStart + perfectWidth;
+    }
+
+    function runSkillCheckLoop() {
+        if (!scActive) return;
+        const canvas = document.getElementById('sc-canvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = 90;
+
+        // 1. วงกลมพื้นหลัง
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.lineWidth = 8;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.stroke();
+
+        // 2. โซนสำเร็จ (สีขาว)
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, scSuccessStart, scSuccessEnd);
+        ctx.lineWidth = 12;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+
+        // 3. โซนเพอร์เฟกต์ (สีเหลืองทอง)
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, scPerfectStart, scPerfectEnd);
+        ctx.lineWidth = 14;
+        ctx.strokeStyle = '#ffcc00';
+        ctx.stroke();
+
+        // 4. เข็มนาฬิกา
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        const needleX = centerX + Math.cos(scAngle) * (radius - 5);
+        const needleY = centerY + Math.sin(scAngle) * (radius - 5);
+        ctx.lineTo(needleX, needleY);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#e74c3c';
+        ctx.stroke();
+
+        // หมุนเข็มเพิ่มขึ้นเรื่อยๆ อย่างต่อเนื่อง
+        scAngle += scSpeed * 0.02;
+
+        // ถ้าปล่อยให้เข็มวิ่งเลยโซนไปโดยไม่กด ถือว่า FAIL อัตโนมัติทันที และสร้างโซนใหม่ต่อทันที
+        if (scAngle > scSuccessEnd) {
+            handleSkillCheckStep('FAIL');
+            if (!scActive) return; // ถ้าครบจำนวนรอบแล้ว ให้หยุดลูป
+        }
+
+        animationFrameId = requestAnimationFrame(runSkillCheckLoop);
+    }
+
+    function handlePlayerInput() {
+        if (!scActive) return;
+
+        let result = 'FAIL';
+        if (scAngle >= scPerfectStart && scAngle <= scPerfectEnd) {
+            result = 'PERFECT!';
+        } else if (scAngle >= scSuccessStart && scAngle <= scSuccessEnd) {
+            result = 'SUCCESS';
+        } else {
+            // กดก่อนถึงโซน ถือว่า FAIL ทันที
+            result = 'FAIL';
+        }
+
+        handleSkillCheckStep(result);
+    }
+
+    function handleSkillCheckStep(result) {
+        if (!scActive) return;
+
+        const currentStep = scTotalCount - scRemainingCount + 1;
+
+        // ส่งผลลัพธ์แจ้งเตือนรอบปัจจุบันไปที่ Host
+        socket.emit('skillcheck-result', { 
+            roomId: currentRoom, 
+            result, 
+            playerName: myName,
+            current: currentStep,
+            total: scTotalCount
+        });
+
+        // แสดงข้อความบนหน้าจอชั่วคราวแบบไม่หยุดเข็ม
+        const fbEl = document.getElementById('feedback-text');
+        if (fbEl) {
+            fbEl.innerText = result;
+            fbEl.style.color = result === 'PERFECT!' ? '#ffcc00' : (result === 'SUCCESS' ? '#5cb85c' : '#d9534f');
+            setTimeout(() => { if (scActive && fbEl) fbEl.innerText = ''; }, 200);
+        }
+
+        scRemainingCount--;
+
+        if (scRemainingCount > 0) {
+            // สร้างโซนถัดไปล่วงหน้าทันทีโดยเข็มวิ่งหมุนต่อไปข้างหน้าไม่หยุด
+            spawnNewZone(scCurrentSize);
+        } else {
+            // ครบทุกรอบแล้ว ปิดหน้าต่าง Skill Check
+            scActive = false;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+            if (timeoutId) clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                const overlay = document.getElementById('skillcheck-overlay');
+                overlay.style.display = 'none';
+                overlay.style.pointerEvents = 'none';
+            }, 400);
+        }
+    }
+
+    // รองรับการกด Spacebar บนคอมพิวเตอร์
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && scActive) {
+            e.preventDefault();
+            handlePlayerInput();
+        }
+    });
+
+    // รองรับการแตะหน้าจอบบนมือถือ
+    const overlayEl = document.getElementById('skillcheck-overlay');
+    if (overlayEl) {
+        overlayEl.addEventListener('click', () => {
+            if (scActive) {
+                handlePlayerInput();
+            }
+        });
+    }
+</script>
+
+</body>
+</html>
