@@ -18,15 +18,14 @@
         .screen.active { display: block; }
         .player-item { background: #2a2a2a; padding: 8px 12px; margin: 5px 0; border-radius: 4px; display: flex; justify-content: space-between; }
         
-        /* สไตล์สำหรับกล่อง Skill Check Overlay */
+        /* สไตล์สำหรับกล่อง Skill Check */
         #skillcheck-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); display: none;
-            flex-direction: column; justify-content: center; align-items: center; z-index: 999;
+            background: rgba(0,0,0,0.7); display: none;
+            justify-content: center; align-items: center; z-index: 999;
         }
         canvas { background: transparent; }
         #feedback-text { position: absolute; font-size: 32px; font-weight: bold; text-shadow: 2px 2px 4px #000; pointer-events: none; }
-        #spectate-label { margin-bottom: 10px; font-size: 20px; color: #ffcc00; font-weight: bold; text-shadow: 1px 1px 2px #000; }
     </style>
 </head>
 <body>
@@ -81,9 +80,8 @@
     </div>
 </div>
 
-<!-- หน้าต่างแสดงวงกลม Skill Check (สำหรับผู้เล่นและโหมด Spectate) -->
+<!-- หน้าต่างแสดงวงกลม Skill Check เมื่อถูกส่งมา -->
 <div id="skillcheck-overlay">
-    <div id="spectate-label"><span id="target-player-name">ตัวเอง</span></div>
     <div style="position: relative; display: flex; justify-content: center; align-items: center;">
         <canvas id="sc-canvas" width="300" height="300"></canvas>
         <div id="feedback-text"></div>
@@ -100,7 +98,6 @@
 
     // ตัวแปรควบคุมระบบ Skill Check Canvas
     let scActive = false;
-    let isMyTurn = false; 
     let scAngle = 0;
     let scSpeed = 1;
     let scSuccessStart = 0;
@@ -113,12 +110,15 @@
     let animationFrameId = null;
     let timeoutId = null;
 
+    // เปลี่ยนหน้าจอ UI
     function showScreen(screenId) {
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         document.getElementById(screenId).classList.add('active');
     }
 
+    // ปุ่มสร้างห้อง
     document.getElementById('btn-create').addEventListener('click', () => {
+        // แก้ไข: เอา .value ออกจาก id="input-name.value" เพราะมันผิดหลักการดึงข้อมูล
         myName = document.getElementById('input-name').value || 'Host';
         socket.emit('create-room', { playerName: myName }, (res) => {
             if (res.success) {
@@ -131,6 +131,7 @@
         });
     });
 
+    // ปุ่มเข้าร่วมห้อง
     document.getElementById('btn-join').addEventListener('click', () => {
         myName = document.getElementById('input-name').value || 'Player';
         const roomId = document.getElementById('input-room').value.toUpperCase();
@@ -149,6 +150,7 @@
         });
     });
 
+    // อัปเดตรายชื่อฝั่ง Host
     function updatePlayerListHost(players) {
         const listEl = document.getElementById('player-list');
         const selectEl = document.getElementById('setting-target');
@@ -157,6 +159,7 @@
         selectEl.innerHTML = '<option value="all">ทุกคนในห้อง</option>';
 
         players.forEach(p => {
+            // แก้ไข: ใส่เครื่องหมาย Backtick (`) ครอบ
             listEl.innerHTML += `<div class="player-item"><span>${p.name}</span><span>${p.id === socket.id ? '(คุณ - Host)' : ''}</span></div>`;
             if (p.id !== socket.id) {
                 selectEl.innerHTML += `<option value="${p.id}">${p.name}</option>`;
@@ -164,19 +167,25 @@
         });
     }
 
+    // อัปเดตรายชื่อฝั่งผู้เล่นทั่วไป
     function updatePlayerListWaiting(players) {
         const listEl = document.getElementById('waiting-player-list');
         listEl.innerHTML = '';
         players.forEach(p => {
+            // แก้ไข: ใส่เครื่องหมาย Backtick (`) ครอบ
             listEl.innerHTML += `<div class="player-item"><span>${p.name}</span><span>${p.id === socket.id ? '(คุณ)' : ''}</span></div>`;
         });
     }
 
     socket.on('update-players', (players) => {
-        if (isHost) updatePlayerListHost(players);
-        else updatePlayerListWaiting(players);
+        if (isHost) {
+            updatePlayerListHost(players);
+        } else {
+            updatePlayerListWaiting(players);
+        }
     });
 
+    // Host กดปุ่มส่ง Skill Check
     document.getElementById('btn-trigger').addEventListener('click', () => {
         const speed = parseFloat(document.getElementById('setting-speed').value);
         const size = parseFloat(document.getElementById('setting-size').value);
@@ -190,9 +199,11 @@
         });
     });
 
+    // รับผลลัพธ์จากลูกห้อง (แสดงที่บอร์ด Host แบบ Real-time)
     socket.on('player-result', ({ playerName, result, current, total }) => {
         const feed = document.getElementById('live-feed');
         const color = result === 'PERFECT!' ? '#ffcc00' : (result === 'SUCCESS' ? '#5cb85c' : '#d9534f');
+        // แก้ไข: ใส่เครื่องหมาย Backtick (`) ครอบ
         const stepText = total > 1 ? ` [รอบที่ ${current}/${total}]` : '';
         feed.innerHTML = `<span style="color:${color}">${playerName}: ${result}${stepText}</span><br>` + feed.innerHTML;
     });
@@ -203,51 +214,45 @@
     });
 
     // ==========================================
-    // ระบบแสดงและซิงค์ Skill Check Real-time
+    // ระบบแสดงและคำนวณ Skill Check Canvas (DBD Style)
     // ==========================================
-    socket.on('trigger-skillcheck', (data) => {
+    // แก้ไข: ต้องดึง settings ออกมาจาก data.settings (อิงตามไฟล์ server ที่คุณเคยให้) 
+    socket.on('trigger-skillcheck', (data) => { 
         if (timeoutId) clearTimeout(timeoutId);
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
-        const settings = data.settings;
+        // ดึงจาก object settings
+        const settings = data.settings || data; // ป้องกันพังถ้ารูปแบบ data มาแปลก
+        
         scSpeed = settings.speed;
         scTotalCount = settings.count;
         scRemainingCount = scTotalCount;
         scCurrentSize = settings.size;
         
-        isMyTurn = (data.targetId === socket.id || data.targetId === 'all');
+        // เช็คก่อนว่าส่งมาหาเราหรือเปล่า หรือส่งหา everyone
+        const isMyTurn = (data.targetId === socket.id || data.targetId === 'all');
         
-        const overlay = document.getElementById('skillcheck-overlay');
-        overlay.style.display = 'flex';
-        
-        const targetNameEl = document.getElementById('target-player-name');
         if (isMyTurn) {
-            targetNameEl.innerText = "ตาของคุณ! (กด Spacebar หรือคลิก)";
-            targetNameEl.style.color = "#5cb85c";
-        } else {
-            targetNameEl.innerText = `กำลังดูเพื่อนเล่น (${data.targetName || 'Player'})`;
-            targetNameEl.style.color = "#ffcc00";
-        }
+            const overlay = document.getElementById('skillcheck-overlay');
+            overlay.style.display = 'flex';
+            overlay.style.pointerEvents = 'auto';
+            
+            const fbEl = document.getElementById('feedback-text');
+            if (fbEl) fbEl.innerText = '';
 
-        const fbEl = document.getElementById('feedback-text');
-        if (fbEl) fbEl.innerText = '';
+            scActive = true;
+            scAngle = 0; // รับรองว่าเข็มเริ่มจาก 0 
+            spawnNewZone(scCurrentSize);
 
-        scActive = true;
-        scAngle = 0; // <--- สำคัญ: รีเซ็ตเข็มมาที่จุดเริ่มต้น (0) เสมอ
-        spawnNewZone(scCurrentSize);
-
-        if (isMyTurn) {
-            runSkillCheckLoopOwner();
-        } else {
-            runSkillCheckLoopSpectator();
+            runSkillCheckLoop();
         }
     });
 
     function spawnNewZone(sizeMultiplier) {
         const zoneWidth = (Math.PI / 2.5) * sizeMultiplier;
-        let minOffset = 2.0; 
-        let maxOffset = 4.0; 
-        
+        let minOffset = 2.0;
+        let maxOffset = 3.5;
+        // สร้างโซนถัดไปข้างหน้าจากตำแหน่งเข็มปัจจุบันเสมอโดยไม่มีสะดุด
         scSuccessStart = scAngle + minOffset + (Math.random() * (maxOffset - minOffset));
         scSuccessEnd = scSuccessStart + zoneWidth;
 
@@ -256,34 +261,39 @@
         scPerfectEnd = scPerfectStart + perfectWidth;
     }
 
-    function drawCanvas(ctx, canvas) {
+    function runSkillCheckLoop() {
+        if (!scActive) return;
+        const canvas = document.getElementById('sc-canvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
         const radius = 90;
 
-        // วงกลมพื้นหลัง
+        // 1. วงกลมพื้นหลัง
         ctx.beginPath();
         ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
         ctx.lineWidth = 8;
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.stroke();
 
-        // โซนสำเร็จ
+        // 2. โซนสำเร็จ (สีขาว)
         ctx.beginPath();
         ctx.arc(centerX, centerY, radius, scSuccessStart, scSuccessEnd);
         ctx.lineWidth = 12;
         ctx.strokeStyle = '#ffffff';
         ctx.stroke();
 
-        // โซนเพอร์เฟกต์
+        // 3. โซนเพอร์เฟกต์ (สีเหลืองทอง)
         ctx.beginPath();
         ctx.arc(centerX, centerY, radius, scPerfectStart, scPerfectEnd);
         ctx.lineWidth = 14;
         ctx.strokeStyle = '#ffcc00';
         ctx.stroke();
 
-        // เข็ม
+        // 4. เข็มนาฬิกา
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);
         const needleX = centerX + Math.cos(scAngle) * (radius - 5);
@@ -292,67 +302,21 @@
         ctx.lineWidth = 4;
         ctx.strokeStyle = '#e74c3c';
         ctx.stroke();
-    }
 
-    // สำหรับคนเล่นจริง: ประมวลผลและส่งพิกัดให้คนอื่นดู
-    function runSkillCheckLoopOwner() {
-        if (!scActive) return;
-        const canvas = document.getElementById('sc-canvas');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-
+        // หมุนเข็มเพิ่มขึ้นเรื่อยๆ อย่างต่อเนื่อง
         scAngle += scSpeed * 0.02;
 
+        // ถ้าปล่อยให้เข็มวิ่งเลยโซนไปโดยไม่กด ถือว่า FAIL อัตโนมัติทันที และสร้างโซนใหม่ต่อทันที
         if (scAngle > scSuccessEnd) {
             handleSkillCheckStep('FAIL');
-            if (!scActive) return;
+            if (!scActive) return; // ถ้าครบจำนวนรอบแล้ว ให้หยุดลูป
         }
 
-        socket.emit('spectate-sync', {
-            roomId: currentRoom,
-            scAngle,
-            scSuccessStart,
-            scSuccessEnd,
-            scPerfectStart,
-            scPerfectEnd
-        });
-
-        drawCanvas(ctx, canvas);
-        animationFrameId = requestAnimationFrame(runSkillCheckLoopOwner);
+        animationFrameId = requestAnimationFrame(runSkillCheckLoop);
     }
-
-    // สำหรับคนดู (Spectator): รับพิกัดมาวาดตามสดๆ
-    function runSkillCheckLoopSpectator() {
-        if (!scActive) return;
-        const canvas = document.getElementById('sc-canvas');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-
-        drawCanvas(ctx, canvas);
-        animationFrameId = requestAnimationFrame(runSkillCheckLoopSpectator);
-    }
-
-    socket.on('spectate-sync', (data) => {
-        if (!isMyTurn && scActive) {
-            scAngle = data.scAngle;
-            scSuccessStart = data.scSuccessStart;
-            scSuccessEnd = data.scSuccessEnd;
-            scPerfectStart = data.scPerfectStart;
-            scPerfectEnd = data.scPerfectEnd;
-        }
-    });
-
-    socket.on('spectate-result', ({ result }) => {
-        const fbEl = document.getElementById('feedback-text');
-        if (fbEl) {
-            fbEl.innerText = result;
-            fbEl.style.color = result === 'PERFECT!' ? '#ffcc00' : (result === 'SUCCESS' ? '#5cb85c' : '#d9534f');
-            setTimeout(() => { if (scActive && fbEl) fbEl.innerText = ''; }, 250);
-        }
-    });
 
     function handlePlayerInput() {
-        if (!scActive || !isMyTurn) return;
+        if (!scActive) return;
 
         let result = 'FAIL';
         if (scAngle >= scPerfectStart && scAngle <= scPerfectEnd) {
@@ -360,6 +324,7 @@
         } else if (scAngle >= scSuccessStart && scAngle <= scSuccessEnd) {
             result = 'SUCCESS';
         } else {
+            // กดก่อนถึงโซน ถือว่า FAIL ทันที
             result = 'FAIL';
         }
 
@@ -371,6 +336,7 @@
 
         const currentStep = scTotalCount - scRemainingCount + 1;
 
+        // ส่งผลลัพธ์แจ้งเตือนรอบปัจจุบันไปที่ Host
         socket.emit('skillcheck-result', { 
             roomId: currentRoom, 
             result, 
@@ -379,53 +345,46 @@
             total: scTotalCount
         });
 
-        socket.emit('spectate-result', { roomId: currentRoom, result });
-
+        // แสดงข้อความบนหน้าจอชั่วคราวแบบไม่หยุดเข็ม
         const fbEl = document.getElementById('feedback-text');
         if (fbEl) {
             fbEl.innerText = result;
             fbEl.style.color = result === 'PERFECT!' ? '#ffcc00' : (result === 'SUCCESS' ? '#5cb85c' : '#d9534f');
-            setTimeout(() => { if (scActive && fbEl) fbEl.innerText = ''; }, 250);
+            setTimeout(() => { if (scActive && fbEl) fbEl.innerText = ''; }, 200);
         }
 
         scRemainingCount--;
 
         if (scRemainingCount > 0) {
+            // สร้างโซนถัดไปล่วงหน้าทันทีโดยเข็มวิ่งหมุนต่อไปข้างหน้าไม่หยุด
             spawnNewZone(scCurrentSize);
         } else {
+            // ครบทุกรอบแล้ว ปิดหน้าต่าง Skill Check
             scActive = false;
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
-
-            // ส่งสัญญาณบอกทุกคนให้ปิดหน้าจอพร้อมกัน
-            socket.emit('spectate-end', { roomId: currentRoom });
 
             if (timeoutId) clearTimeout(timeoutId);
             timeoutId = setTimeout(() => {
                 const overlay = document.getElementById('skillcheck-overlay');
                 overlay.style.display = 'none';
-            }, 300);
+                overlay.style.pointerEvents = 'none';
+            }, 400);
         }
     }
 
-    socket.on('spectate-end', () => {
-        scActive = false;
-        if (animationFrameId) cancelAnimationFrame(animationFrameId);
-        const overlay = document.getElementById('skillcheck-overlay');
-        overlay.style.display = 'none';
-    });
-
-    // ปุ่มกด Spacebar หรือคลิกจอ (เฉพาะคนที่มีเทิร์นเท่านั้นที่กดได้)
+    // รองรับการกด Spacebar บนคอมพิวเตอร์
     window.addEventListener('keydown', (e) => {
-        if (e.code === 'Space' && scActive && isMyTurn) {
+        if (e.code === 'Space' && scActive) {
             e.preventDefault();
             handlePlayerInput();
         }
     });
 
+    // รองรับการแตะหน้าจอบบนมือถือ
     const overlayEl = document.getElementById('skillcheck-overlay');
     if (overlayEl) {
         overlayEl.addEventListener('click', () => {
-            if (scActive && isMyTurn) {
+            if (scActive) {
                 handlePlayerInput();
             }
         });
