@@ -49,8 +49,8 @@
         <div style="background: #252525; padding: 15px; border-radius: 8px; margin-top: 15px;">
             <h3>ตั้งค่าสกิลเช็ค</h3>
             
-            <label>ความเร็วเข็ม (Speed): <span id="val-speed" style="color: #ffcc00; font-weight: bold;">1</span></label>
-            <input type="range" id="setting-speed" min="1" max="10" value="1" oninput="document.getElementById('val-speed').innerText = this.value">
+            <label>ความเร็วเข็ม (Speed): <span id="val-speed" style="color: #ffcc00; font-weight: bold;">3</span></label>
+            <input type="range" id="setting-speed" min="1" max="5" value="3" oninput="document.getElementById('val-speed').innerText = this.value">
             
             <label style="margin-top: 10px; display: block;">ขนาดโซนสำเร็จ (Size multiplier): <span id="val-size" style="color: #ffcc00; font-weight: bold;">1</span>x</label>
             <input type="range" id="setting-size" min="0.5" max="2" step="0.1" value="1" oninput="document.getElementById('val-size').innerText = this.value">
@@ -289,7 +289,7 @@
         ctx.stroke();
 
         // ดึงค่าความเร็วจากสไลเดอร์แบบเรียลไทม์ (เลขน้อยช้า, เลขมากเร็ว)
-        scAngle += scSpeed * 0.012;
+        scAngle += scSpeed * 0.02;
 
         // ถ้าเข็มหมุนครบรอบ (เกิน 2Pi) ถือว่าพลาด
         if (scAngle > Math.PI * 2) {
