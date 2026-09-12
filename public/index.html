@@ -389,7 +389,7 @@
 
         const currentStep = scTotalCount - scRemainingCount + 1;
 
-        // แจ้งผลไปให้ Host บันทึก และบอกทุกคนให้แสดงเอฟเฟกต์ผลลัพธ์พร้อมกัน
+        // ส่งผลลัพธ์ไปให้ Host และผู้ชมคนอื่นเห็น
         socket.emit('skillcheck-result', { 
             roomId: currentRoom, 
             result, 
@@ -400,7 +400,6 @@
 
         socket.emit('spectate-result', { roomId: currentRoom, result });
 
-        // แสดงข้อความบนจอตัวเอง
         const fbEl = document.getElementById('feedback-text');
         if (fbEl) {
             fbEl.innerText = result;
@@ -413,34 +412,28 @@
         if (scRemainingCount > 0) {
             spawnNewZone(scCurrentSize);
         } else {
+            // ครบทุกรอบแล้ว ปิดหน้าต่างของตัวเอง
             scActive = false;
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+            // ส่งสัญญาณบอกทุกคนในห้องว่าจบแล้ว ปิดจอพร้อมกันทันที
+            socket.emit('spectate-end', { roomId: currentRoom });
 
             if (timeoutId) clearTimeout(timeoutId);
             timeoutId = setTimeout(() => {
                 const overlay = document.getElementById('skillcheck-overlay');
                 overlay.style.display = 'none';
-            }, 500);
+            }, 300);
         }
     }
 
-    // รองรับการกด Spacebar (เฉพาะเจ้าของตาเท่านั้นที่จะกดได้จริง)
-    window.addEventListener('keydown', (e) => {
-        if (e.code === 'Space' && scActive && isMyTurn) {
-            e.preventDefault();
-            handlePlayerInput();
-        }
+    // รับสัญญาณจากคนเล่นว่าจบเกมแล้ว ให้คนดูปิดจอตามทันที
+    socket.on('spectate-end', () => {
+        scActive = false;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        const overlay = document.getElementById('skillcheck-overlay');
+        overlay.style.display = 'none';
     });
-
-    // รองรับการแตะหน้าจอมือถือ (เฉพาะเจ้าของตา)
-    const overlayEl = document.getElementById('skillcheck-overlay');
-    if (overlayEl) {
-        overlayEl.addEventListener('click', () => {
-            if (scActive && isMyTurn) {
-                handlePlayerInput();
-            }
-        });
-    }
 </script>
 
 </body>
